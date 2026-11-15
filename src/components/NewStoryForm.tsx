@@ -1,7 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { genres, me, type Art, type Rating, type Story } from "@/lib/data";
+import { api, ApiError } from "@/lib/api";
+import { genres, type Art, type Rating, type Story } from "@/lib/data";
+import { useSession } from "./SessionProvider";
 import { Book } from "./Book";
 import { Icon } from "./Icon";
 import { Board, Spine } from "./Shelf";
@@ -28,20 +32,40 @@ export function NewStoryForm() {
   const [pal, setPal] = useState(0);
   const [art, setArt] = useState<Art>("sun");
   const [cover, setCover] = useState<string | undefined>();
-  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
+  const { ready, token, profile } = useSession();
 
   // La imagen vive solo en este navegador; se libera al cambiarla o salir.
   useEffect(() => () => { if (cover) URL.revokeObjectURL(cover); }, [cover]);
 
   const story: Story = {
-    slug: "nueva", title: title.trim() || "Tu título", author: me.handle, color: COLORS[pal].color, ink: COLORS[pal].ink, art, cover,
+    slug: "nueva", title: title.trim() || "Tu título", author: profile?.handle ?? "tu.usuario", color: COLORS[pal].color, ink: COLORS[pal].ink, art, cover,
     genre, fandom: fandom.trim() || "Original", tropes: tropes.split(",").map((t) => t.trim()).filter(Boolean), warnings: [], rating,
     status: "En curso", format: "Narrativa", chapters: 12, votes: 0, reads: 0, updatedDays: 0, tagline, synopsis: [synopsis],
   };
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    setSent(true);
+    if (busy) return;
+    if (!token) return setError("Entra a tu cuenta para crear la historia.");
+    setBusy(true);
+    setError("");
+    try {
+      // Nace como borrador: se vuelve pública al publicar su primer capítulo.
+      const created = await api<{ slug: string }>("/stories", {
+        method: "POST", token,
+        body: JSON.stringify({
+          title: story.title, tagline: tagline.trim(), synopsis: synopsis.trim(), genre, fandom: story.fandom,
+          tropes: story.tropes, rating, color: story.color, ink: story.ink, art,
+        }),
+      });
+      router.push(`/editor/${created.slug}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? `No se pudo crear: ${err.message}` : "No se pudo crear: no hay conexión con la API.");
+      setBusy(false);
+    }
   }
 
   return (
@@ -93,8 +117,10 @@ export function NewStoryForm() {
           )}
         </fieldset>
 
-        {sent && <p className="notice" role="status">Crear la historia necesita la API, que aún no está conectada. No se guardó nada todavía.</p>}
-        <div className="row wrap"><Btn type="submit" size="lg" icon="arrow">Crear y escribir el primer capítulo</Btn><Btn variant="ghost" href="/escribir">Cancelar</Btn></div>
+        {cover && <p className="muted small">La imagen es solo una vista previa: subir portadas todavía no está en la API, así que la historia se crea con la portada generada.</p>}
+        {ready && !token && <p className="notice" role="status">Para crear una historia necesitas tu cuenta. <Link href="/entrar">Entrar</Link></p>}
+        {error && <p className="notice" role="alert">{error}</p>}
+        <div className="row wrap"><Btn type="submit" size="lg" icon="arrow" disabled={busy}>{busy ? "Creando…" : "Crear y escribir el primer capítulo"}</Btn><Btn variant="ghost" href="/escribir">Cancelar</Btn></div>
       </div>
 
       <aside className="preview" aria-label="Vista previa">

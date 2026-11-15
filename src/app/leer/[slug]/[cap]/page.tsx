@@ -1,21 +1,34 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { ReaderView } from "@/components/ReaderView";
-import { getChapterBlocks, getChapters, getStories, getStory } from "@/lib/data";
+import { getChapter, getChapters, getStories, getStory } from "@/lib/queries";
 
-export function generateStaticParams() {
-  return getStories().flatMap((s) => Array.from({ length: s.chapters }, (_, i) => ({ slug: s.slug, cap: String(i + 1) })));
+export async function generateStaticParams() {
+  const stories = await getStories();
+  const all = await Promise.all(stories.map(async (s) => (await getChapters(s.slug)).map((c) => ({ slug: s.slug, cap: String(c.n) }))));
+  return all.flat();
 }
 export async function generateMetadata({ params }: PageProps<"/leer/[slug]/[cap]">): Promise<Metadata> {
   const { slug, cap } = await params;
-  const story = getStory(slug);
+  const story = await getStory(slug);
   return story ? { title: `${story.title} · capítulo ${cap}` } : {};
 }
 
-export default async function Leer({ params }: PageProps<"/leer/[slug]/[cap]">) {
+// La lectura de `params` va dentro de <Suspense>: así la navegación muestra el marco al instante.
+export default function Leer({ params }: PageProps<"/leer/[slug]/[cap]">) {
+  return (
+    <Suspense fallback={<p className="muted" style={{ padding: 24 }}>Abriendo el capítulo…</p>}>
+      <Capitulo params={params} />
+    </Suspense>
+  );
+}
+
+async function Capitulo({ params }: Pick<PageProps<"/leer/[slug]/[cap]">, "params">) {
   const { slug, cap } = await params;
-  const story = getStory(slug);
-  const chapter = getChapters(slug).find((c) => c.n === Number(cap));
+  const n = Number(cap);
+  if (!Number.isInteger(n) || n < 1) notFound();
+  const [story, chapter] = await Promise.all([getStory(slug), getChapter(slug, n)]);
   if (!story || !chapter) notFound();
-  return <ReaderView story={story} chapter={chapter} total={story.chapters} blocks={getChapterBlocks()} />;
+  return <ReaderView story={story} chapter={chapter.meta} total={story.chapters} blocks={chapter.blocks} />;
 }

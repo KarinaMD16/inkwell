@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { me } from "@/lib/data";
 import { Icon } from "./Icon";
+import { useSession } from "./SessionProvider";
 import { Btn, Leader } from "./ui";
 
 interface Settings { mature: boolean; blocked: string[]; nChapters: boolean; nReplies: boolean; nFollowers: boolean }
@@ -22,6 +22,7 @@ function Switch({ on, onChange, children }: { on: boolean; onChange: (v: boolean
 export function SettingsView() {
   const [s, setS] = useState<Settings>(DEFAULTS);
   const [tag, setTag] = useState("");
+  const { ready, session, profile, signOut } = useSession();
 
   useEffect(() => {
     try {
@@ -46,16 +47,26 @@ export function SettingsView() {
   return (
     <div className="stack-lg narrow">
       <h1 className="h-hero">Ajustes</h1>
-      <p className="notice" role="status">Estos ajustes se guardan en este navegador hasta que exista la cuenta en el servidor.</p>
+      <p className="notice" role="status">Las preferencias de lectura y notificaciones se guardan en este navegador; todavía no se sincronizan con tu cuenta.</p>
 
       <section className="card">
         <div className="shelflabel">Cuenta</div>
-        <Leader k="Usuario">@{me.handle}</Leader>
-        <Leader k="Correo">[TU CORREO]</Leader>
-        <div className="row wrap">
-          <Btn variant="ghost" size="sm" href={`/perfil/${me.handle}`} icon="eye">Ver mi perfil</Btn>
-          <Btn variant="ghost" size="sm" href="/recuperar">Cambiar contraseña</Btn>
-        </div>
+        {session ? (
+          <>
+            <Leader k="Usuario">{profile ? `@${profile.handle}` : "…"}</Leader>
+            <Leader k="Correo">{session.user.email ?? "—"}</Leader>
+            <div className="row wrap">
+              {profile && <Btn variant="ghost" size="sm" href={`/perfil/${profile.handle}`} icon="eye">Ver mi perfil</Btn>}
+              <Btn variant="ghost" size="sm" href="/recuperar">Cambiar contraseña</Btn>
+              <Btn variant="ghost" size="sm" onClick={signOut}>Cerrar sesión</Btn>
+            </div>
+          </>
+        ) : ready ? (
+          <>
+            <p className="muted">No has entrado a tu cuenta.</p>
+            <div className="row wrap"><Btn size="sm" href="/entrar">Entrar</Btn><Btn variant="ghost" size="sm" href="/registro">Crear cuenta</Btn></div>
+          </>
+        ) : null}
       </section>
 
       <section className="card">

@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { me } from "@/lib/data";
+import { colorFor } from "@/lib/data";
 import { Icon, type IconName } from "./Icon";
+import { useSession } from "./SessionProvider";
 import { Avatar, Btn, IconBtn } from "./ui";
 
 const NAV: { href: string; label: string; icon: IconName }[] = [
@@ -18,6 +19,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
+  const { ready, session, profile, signOut } = useSession();
   const isOn = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   return (
     <div className="shell">
@@ -47,15 +49,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="topbar__right">
             <span className="only-desktop"><Btn variant="ghost" href="/escribir" icon="pen">Escribir</Btn></span>
             <span className="only-desktop"><IconBtn icon="bell" label="Novedades" href="/novedades" /></span>
-            <Link href={`/perfil/${me.handle}`} aria-label="Tu perfil" style={{ display: "flex" }}>
-              <Avatar letter={me.name[0]} color={me.color} />
-            </Link>
+            {profile ? (
+              <Link href={`/perfil/${profile.handle}`} aria-label="Tu perfil" style={{ display: "flex" }}>
+                <Avatar letter={profile.name[0].toUpperCase()} color={colorFor(profile.handle)} />
+              </Link>
+            ) : ready && !session ? (
+              <Btn href="/entrar">Entrar</Btn>
+            ) : null}
           </div>
         </header>
         <main className="content">{children}</main>
         <footer className="foot">
           <span>Inkwell · by Koral Studio</span>
-          <Link href="/entrar">Entrar</Link>
+          {session ? <button type="button" className="linkbtn" onClick={signOut}>Cerrar sesión</button> : <Link href="/entrar">Entrar</Link>}
           <Link href="/privacidad">Privacidad</Link>
           <Link href="/terminos">Términos</Link>
         </footer>

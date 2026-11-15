@@ -1,18 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Book } from "@/components/Book";
-import { OpenBook } from "@/components/OpenBook";
-import { Shelf, Spine } from "@/components/Shelf";
+import { Desk } from "@/components/Desk";
 import { ShelfCard } from "@/components/StoryCard";
-import { Btn, Progress, Scribble, Vial } from "@/components/ui";
-import { getStories, getStory, pct, reading } from "@/lib/data";
+import { Btn, Scribble } from "@/components/ui";
+import { getStories } from "@/lib/queries";
 
-export default function Inicio() {
-  const stories = getStories();
-  const [first, second] = reading;
-  const now = getStory(first.slug)!;
-  const also = getStory(second.slug)!;
-  const mine = reading.map((r) => getStory(r.slug)!).slice(2);
+export default async function Inicio() {
+  const stories = await getStories();
   const popular = [...stories].sort((a, b) => b.votes - a.votes).slice(0, 6);
   const fresh = [...stories].sort((a, b) => a.updatedDays - b.updatedDays).slice(0, 6);
 
@@ -23,33 +17,7 @@ export default function Inicio() {
         <Scribble width={220} />
       </div>
 
-      <section className="desk">
-        <div className="desk__blob" aria-hidden="true" />
-        <OpenBook chapter={first.chapter} color={now.color} />
-        <div className="desk__now">
-          <span className="muted">Lo dejaste abierto aquí</span>
-          <h2 className="h-page">{now.title}</h2>
-          <strong>@{now.author}</strong>
-          <Vial pct={pct(first.chapter, now.chapters)} label={`Capítulo ${first.chapter} de ${now.chapters} · ${pct(first.chapter, now.chapters)} % entintado`} />
-          <div className="row wrap">
-            <Btn href={`/leer/${now.slug}/${first.chapter}`} icon="arrow">Seguir leyendo</Btn>
-            <Btn variant="ghost" href={`/historia/${now.slug}`}>Ver ficha</Btn>
-          </div>
-        </div>
-        <div className="desk__also">
-          <Book story={also} size="n" />
-          <div className="stack-sm" style={{ minWidth: 0, flex: 1 }}>
-            <span className="muted small">También abierto</span>
-            <span className="h-card">{also.title}</span>
-            <Progress pct={pct(second.chapter, also.chapters)} track="var(--line)" />
-            <Link href={`/leer/${also.slug}/${second.chapter}`} className="textlink">Seguir en el cap. {second.chapter}</Link>
-          </div>
-        </div>
-      </section>
-
-      <Shelf label={`Tu repisa · ${reading.length}`} action={<Link href="/biblioteca" className="textlink">Ver tu librero</Link>}>
-        {mine.map((s) => <Spine key={s.slug} story={s} />)}
-      </Shelf>
+      <Desk stories={stories} />
 
       <section className="shelf">
         <div className="shelf__head"><div className="shelflabel">Populares esta semana</div><Link href="/explorar" className="textlink">Ver todas</Link></div>

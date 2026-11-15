@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import type { Block, ChapterMeta, Story } from "@/lib/data";
+import { useSession } from "./SessionProvider";
 import { Book } from "./Book";
 import { Icon } from "./Icon";
 import { Btn, IconBtn } from "./ui";
@@ -20,7 +23,30 @@ export function ReaderView({ story, chapter, total, blocks }: { story: Story; ch
   const [prefs, setPrefs] = useState<Prefs>(DEFAULTS);
   const [panel, setPanel] = useState(false);
   const [voted, setVoted] = useState(false);
+  const [voting, setVoting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const router = useRouter();
+  const { token } = useSession();
+  const signedIn = Boolean(token);
+
+  // Con sesión, abrir un capítulo lo deja como "por dónde vas" en la repisa.
+  useEffect(() => {
+    if (!token) return;
+    api(`/me/library/${story.slug}`, { method: "PUT", token, body: JSON.stringify({ chapter: chapter.n }) }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez por capítulo y sesión, no por cada token renovado
+  }, [signedIn, story.slug, chapter.n]);
+
+  async function vote() {
+    if (!token) return router.push("/entrar");
+    if (voting) return;
+    setVoting(true);
+    try {
+      const res = await api<{ voted: boolean }>(`/stories/${story.slug}/chapters/${chapter.n}/vote`, { method: voted ? "DELETE" : "PUT", token });
+      setVoted(res.voted);
+    } catch { /* se queda como estaba */ } finally {
+      setVoting(false);
+    }
+  }
 
   // Las preferencias viven en el navegador hasta que exista la cuenta sincronizada.
   useEffect(() => {
@@ -131,6 +157,14 @@ export function ReaderView({ story, chapter, total, blocks }: { story: Story; ch
                 </figure>
               );
             }
+            if (b.type === "post") {
+              return (
+                <figure key={i} className="fichablock"><figcaption>@{b.author}</figcaption><p>{b.text}</p></figure>
+              );
+            }
+            if (b.type === "interludio") {
+              return <div key={i} className="para"><p><em>{b.text}</em></p></div>;
+            }
             return (
               <figure key={i} className="fichablock"><figcaption>{b.name}</figcaption><p>{b.text}</p></figure>
             );
@@ -138,7 +172,7 @@ export function ReaderView({ story, chapter, total, blocks }: { story: Story; ch
         </div>
         <footer className="reader__end">
           <div className="row">
-            <Btn variant="ghost" icon="heart" ariaPressed={voted} onClick={() => setVoted((v) => !v)}>{voted ? "Votado" : "Votar"}</Btn>
+            <Btn variant="ghost" icon="heart" ariaPressed={voted} onClick={vote}>{voted ? "Votado" : "Votar"}</Btn>
             <Btn variant="ghost" icon="chat" href="/registro">Comentar</Btn>
           </div>
           {next ? <Btn href={next} icon="arrow">Siguiente capítulo</Btn> : <Btn href={`/historia/${story.slug}`} variant="ink">Volver a la ficha</Btn>}

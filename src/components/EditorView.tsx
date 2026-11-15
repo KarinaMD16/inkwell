@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { ChapterMeta, Story } from "@/lib/data";
+import { api, ApiError } from "@/lib/api";
+import type { Block, ChapterMeta, MyStory } from "@/lib/data";
+import { useSession } from "./SessionProvider";
 import { Book } from "./Book";
 import { Icon, type IconName } from "./Icon";
 import { Btn } from "./ui";
@@ -28,22 +30,66 @@ const TEMPLATES: { type: EBlock["type"]; label: string; hint: string; icon: Icon
   { type: "ficha", label: "Ficha de personaje", hint: "Faceclaim, datos y descripción", icon: "idcard" },
   { type: "interludio", label: "Interludio", hint: "Una pausa con su propio formato", icon: "dash" },
 ];
-const START: Draft = {
-  title: "Quién vive aquí", face: "novela", ornament: "sparkle",
-  blocks: [
-    { id: 1, type: "p", text: "Antes de seguir, conviene que conozcas a los vecinos. No todos pagan alquiler y solo algunos están técnicamente vivos." },
-    { id: 2, type: "ficha", name: "Doña Carmen", text: "Vive en el 2A desde 1974. Dejó de envejecer en 1989 y nadie se ha atrevido a preguntar." },
-    { id: 3, type: "p", text: "La conocerás pronto. Ella ya te conoce a ti." },
-  ],
-};
+const START: Draft = { title: "", face: "novela", ornament: "ninguno", blocks: [{ id: 1, type: "p", text: "" }] };
 
-export function EditorView({ story, chapters }: { story: Story; chapters: ChapterMeta[] }) {
+/** Pasa los bloques del editor al formato de la API. Los bloques vacíos no se envían. */
+function toBlocks(blocks: EBlock[]): Block[] {
+  return blocks.flatMap((b): Block[] => {
+    const text = b.text.trim();
+    if (b.type === "ficha") return b.name.trim() || text ? [{ type: "ficha", name: b.name.trim() || "Sin nombre", tags: [], text }] : [];
+    if (!text) return [];
+    if (b.type === "chat") {
+      // Un mensaje por línea, "Quién: texto".
+      const messages = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((line) => {
+        const cut = line.indexOf(":");
+        return cut > 0 ? { who: line.slice(0, cut).trim(), text: line.slice(cut + 1).trim() } : { who: "", text: line };
+      });
+      return [{ type: "chat", title: "Chat", messages }];
+    }
+    if (b.type === "post") {
+      const m = /^@?([^:\s]+):\s*([\s\S]*)$/.exec(text);
+      return [m ? { type: "post", author: m[1], text: m[2] } : { type: "post", author: "", text }];
+    }
+    return [{ type: b.type, text }];
+  });
+}
+
+export function EditorView({ story, chapters }: { story: MyStory; chapters: ChapterMeta[] }) {
   const key = `inkwell:borrador:${story.slug}`;
+  const { token } = useSession();
   const [draft, setDraft] = useState<Draft>(START);
   const [savedAt, setSavedAt] = useState<string>("Sin cambios");
   const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  /** Capítulo que se acaba de publicar, para enlazarlo. */
+  const [publishedN, setPublishedN] = useState<number | null>(null);
+  /** Capítulos ya en el servidor, contando borradores: el que se escribe es el siguiente. */
+  const [count, setCount] = useState(story.totalChapters);
 
-  // Mientras no haya API, el borrador se guarda en este navegador.
+  async function publish() {
+    if (busy) return;
+    const title = draft.title.trim();
+    const content = toBlocks(draft.blocks);
+    if (!title) return setNotice("Ponle un título al capítulo antes de publicarlo.");
+    if (content.length === 0) return setNotice("El capítulo está vacío: escribe al menos un párrafo.");
+    if (!token) return setNotice("Tu sesión se cerró. Entra de nuevo para publicar; tu borrador sigue guardado aquí.");
+    setBusy(true);
+    setNotice("");
+    try {
+      const created = await api<{ n: number }>(`/stories/${story.slug}/chapters`, { method: "POST", token, body: JSON.stringify({ title, content, publish: true }) });
+      try { localStorage.removeItem(key); } catch { /* nada */ }
+      setDraft(START);
+      setSavedAt("Publicado");
+      setCount(created.n);
+      setPublishedN(created.n);
+    } catch (e) {
+      setNotice(e instanceof ApiError ? `No se pudo publicar: ${e.message}` : "No se pudo publicar: no hay conexión con la API. Tu borrador sigue guardado aquí.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // El borrador se guarda en este navegador hasta que lo publiques.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -77,18 +123,24 @@ export function EditorView({ story, chapters }: { story: Story; chapters: Chapte
           <span><strong>{story.title}</strong><span className="small muted">{savedAt}</span></span>
         </Link>
         <div className="row wrap">
-          <Btn variant="ghost" size="sm" icon="calendar" onClick={() => setNotice("Programar la publicación necesita la API, que aún no está conectada.")}>Programar</Btn>
-          <Btn size="sm" onClick={() => setNotice("Publicar necesita la API, que aún no está conectada. Tu borrador sigue guardado aquí.")}>Publicar</Btn>
+          <Btn variant="ghost" size="sm" icon="calendar" onClick={() => setNotice("Programar la publicación todavía no existe en la API. Por ahora solo se puede publicar al momento.")}>Programar</Btn>
+          <Btn size="sm" onClick={publish} disabled={busy}>{busy ? "Publicando…" : "Publicar"}</Btn>
         </div>
       </header>
       {notice && <div className="notice" role="status">{notice}</div>}
+      {publishedN !== null && (
+        <div className="notice" role="status">
+          Capítulo {publishedN} publicado. <Link href={`/leer/${story.slug}/${publishedN}`}>Leerlo</Link>. Puede tardar un par de minutos en aparecer en las listas.
+        </div>
+      )}
 
       <div className="editor__body">
         <nav className="editor__chapters" aria-label="Capítulos">
           <div className="eyebrow">Capítulos</div>
-          {chapters.slice(0, 5).map((c, i) => (
-            <span key={c.n} className={`chapterlink${i === 3 ? " is-on" : ""}`}><b>{c.n}</b>{i === 3 ? draft.title || "Sin título" : c.title}</span>
+          {chapters.map((c) => (
+            <Link key={c.n} href={`/leer/${story.slug}/${c.n}`} className="chapterlink"><b>{c.n}</b>{c.title}</Link>
           ))}
+          <span className="chapterlink is-on"><b>{count + 1}</b>{draft.title || "Sin título"}</span>
         </nav>
 
         <main className="editor__page">

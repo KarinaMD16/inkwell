@@ -66,6 +66,13 @@ ol, ul { list-style: none; }
 .iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: #fff; color: var(--ink); }
 .iconbtn:hover { color: var(--ink); background: var(--tint); }
 .iconbtn--on { background: var(--tint); border-color: var(--deep); }
+.googlebtn { align-self: center; display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; flex: none; border-radius: 50%; border: 1.5px solid var(--line); background: #fff; transition: transform 0.15s, border-color 0.15s; }
+.googlebtn:hover:not(:disabled) { border-color: var(--ink); transform: translateY(-2px); }
+.googlebtn:disabled { opacity: 0.5; }
+/* Hueco del botón que dibuja Google: reserva el alto para que el formulario no salte al cargar. */
+.googleslot { align-self: center; display: flex; align-items: center; justify-content: center; min-height: 44px; color-scheme: light; }
+/* Los estilos de Google cuentan con content-box; con el border-box global de la app el ícono queda en 0 px. */
+.googleslot * { box-sizing: content-box; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; color: var(--ink); }
 .chip--tint { background: var(--tint); } .chip--white { background: #fff; } .chip--sand { background: var(--sand); } .chip--lilac { background: #f1eef9; }
 .chip--deep { background: var(--deep); color: #fff; }
