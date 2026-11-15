@@ -4,6 +4,7 @@ import "@fontsource-variable/inter";
 import "@fontsource-variable/literata";
 import "@fontsource-variable/literata/wght-italic.css";
 import "./globals.css";
+import { SessionProvider } from "@/components/SessionProvider";
 
 export const metadata: Metadata = {
   title: { default: "Inkwell", template: "%s · Inkwell" },
@@ -14,7 +15,7 @@ export const viewport: Viewport = { themeColor: "#0F8B80" };
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body><SessionProvider>{children}</SessionProvider></body>
     </html>
   );
 }

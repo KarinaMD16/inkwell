@@ -1,18 +1,28 @@
 # Inkwell · web
 
-Frontend del MVP de Inkwell (Next.js, App Router, TypeScript). Todas las pantallas del lienzo de diseño
-están implementadas con **datos de muestra**; todavía no hay backend conectado.
+Frontend del MVP de Inkwell (Next.js, App Router, TypeScript). Lee y escribe a través de la API
+(`inkwell-backend`) y usa Supabase Auth para las cuentas (correo y Google).
 
 ## Cómo correrlo
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000
-npm run build    # compila y prerenderiza
+cp env.example .env.local   # en Windows: copy env.example .env.local
+npm run dev                 # http://localhost:3000
+npm run build               # compila y prerenderiza; necesita la API encendida
 npm run lint
 ```
 
-Requiere Node 20 o superior.
+Requiere Node 20 o superior y la API corriendo en `NEXT_PUBLIC_API_URL` (por defecto `http://localhost:3001`).
+
+## Variables de entorno
+
+| Variable | De dónde sale |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | La llave publishable (`sb_publishable_...`). Es pública; la secreta nunca va aquí |
+| `NEXT_PUBLIC_API_URL` | URL de la API de Inkwell |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Client ID del cliente OAuth de Google, el mismo que usa Supabase. Vacío: Google entra por redirección a través de supabase.co |
 
 ## Pantallas
 
@@ -37,28 +47,26 @@ En teléfono, la barra lateral pasa a ser la barra de cinco pestañas de la app.
 
 ## Dónde está cada cosa
 
-- `src/lib/data.ts`: tipos y datos de muestra. **Es el único punto que hay que cambiar** para conectar la API:
-  las funciones `getStories`, `getStory`, `getChapters`, `getChapterBlocks`, `getAuthor`, etc.
-- `src/components/`: el libro 3D (`Book`), repisas y lomos (`Shelf`), controles (`ui`) y las vistas con estado
-  (`Explorer`, `LibraryView`, `ReaderView`, `EditorView`).
+- `src/lib/queries.ts`: lectura pública desde la API (historias, capítulos, perfiles), con caché de minutos. Solo servidor.
+- `src/lib/data.ts`: tipos, utilidades y lo que sigue de muestra (novedades y la lista del librero).
+- `src/lib/api.ts` y `src/lib/supabase.ts`: cliente de la API y cliente de Supabase (solo para la sesión).
+- `src/components/SessionProvider.tsx`: la sesión y el perfil de quien entró. `useLibrary` y `useMyStories` traen su repisa y sus historias.
+- `src/components/`: el libro 3D (`Book`), repisas y lomos (`Shelf`), controles (`ui`) y las vistas con estado.
 - `src/app/globals.css`: el sistema de diseño completo (colores, tipografía, libro 3D, repisas, fichas).
 - `public/`: la mascota. Las tipografías van autoalojadas con Fontsource, sin llamadas a Google.
 
-## Qué funciona de verdad y qué es de muestra
+## Qué está conectado y qué falta
 
-Funciona en el navegador: filtros y búsqueda de Explorar, vistas de la biblioteca, ajustes del lector
-(se guardan en el navegador), editor con plantillas y estilos de título (el borrador se guarda en el navegador),
-y la animación de "Abrir el libro".
+Conectado a la API y a Supabase Auth:
 
-Pendiente de backend (NestJS + Supabase):
+- Crear cuenta, entrar, salir y recuperar contraseña con correo; entrar con Google cuando el proveedor esté activado en Supabase.
+- Inicio, explorar, ficha, lector y perfiles con datos reales.
+- Repisa: guardar y quitar historias, y el capítulo por el que vas se guarda al abrirlo.
+- Votar capítulos, crear historias y publicar capítulos desde el editor (el borrador vive en el navegador hasta publicarlo).
 
-- Registro e inicio de sesión (Google y correo).
-- Guardar, votar, seguir y comentar de forma persistente.
-- Publicar y programar capítulos.
-- Importación real de .docx (detección de capítulos con mammoth en la API).
-- Subida de portadas: `Book` ya acepta `story.cover` y acomoda la imagen a la tapa.
-- Notificaciones, progreso sincronizado y lectura sin conexión.
-- Textos de privacidad y términos.
+Todavía de muestra o pendiente en la API:
 
-Los capítulos de muestra usan un formato de bloques (`Block` en `data.ts`) pensado para migrar a
-TipTap/ProseMirror, como define el documento de contexto del proyecto.
+- Novedades, comentarios, seguir autores y la lista del librero.
+- Programar capítulos, subir portadas e importar .docx.
+- Ajustes de lectura y notificaciones: se guardan en el navegador, no en la cuenta.
+- Lectura sin conexión.

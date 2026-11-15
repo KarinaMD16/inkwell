@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { Book } from "@/components/Book";
 import { Icon } from "@/components/Icon";
 import { Board, Spine } from "@/components/Shelf";
 import { StoryActions } from "@/components/StoryActions";
 import { Avatar, Btn, Chip, Leader } from "@/components/ui";
-import { fmt, getChapters, getStories, getStory, reading, updatedLabel } from "@/lib/data";
+import { fmt, updatedLabel } from "@/lib/data";
+import { getChapters, getStories, getStory } from "@/lib/queries";
 
-export function generateStaticParams() {
-  return getStories().map((s) => ({ slug: s.slug }));
+export async function generateStaticParams() {
+  return (await getStories()).map((s) => ({ slug: s.slug }));
 }
 export async function generateMetadata({ params }: PageProps<"/historia/[slug]">): Promise<Metadata> {
-  const story = getStory((await params).slug);
+  const story = await getStory((await params).slug);
   return story ? { title: story.title, description: story.tagline } : {};
 }
 
@@ -23,15 +25,25 @@ function TagRow({ label, tags }: { label: string; tags: string[] }) {
   );
 }
 
-export default async function Historia({ params }: PageProps<"/historia/[slug]">) {
+// La lectura de `params` va dentro de <Suspense>: así la navegación muestra el marco al instante.
+export default function Historia({ params }: PageProps<"/historia/[slug]">) {
+  return (
+    <Suspense fallback={<p className="muted">Sacando el libro de la repisa…</p>}>
+      <Ficha params={params} />
+    </Suspense>
+  );
+}
+
+async function Ficha({ params }: Pick<PageProps<"/historia/[slug]">, "params">) {
   const { slug } = await params;
-  const story = getStory(slug);
+  const story = await getStory(slug);
   if (!story) notFound();
-  const all = getStories();
-  const i = all.indexOf(story);
-  const neighbors = [1, 2, 3, 4].map((d) => all[(i + d) % all.length]);
-  const chapters = getChapters(slug);
-  const at = reading.find((r) => r.slug === slug)?.chapter ?? 0;
+  const all = await getStories();
+  const i = Math.max(0, all.findIndex((s) => s.slug === slug));
+  const neighbors = all.length > 1 ? [1, 2, 3, 4].map((d) => all[(i + d) % all.length]).filter((s) => s.slug !== slug) : [];
+  const chapters = await getChapters(slug);
+  // El rastro entintado por persona llega cuando el índice se arme en el navegador; por ahora va sin entintar.
+  const at = 0;
   const shown = chapters.slice(0, 7);
 
   return (
@@ -58,7 +70,7 @@ export default async function Historia({ params }: PageProps<"/historia/[slug]">
           <Leader k="Lecturas">{fmt(story.reads)}</Leader>
           <Leader k="Votos">{fmt(story.votes)}</Leader>
           <Leader k="Actualizada">{updatedLabel(story.updatedDays)}</Leader>
-          <StoryActions story={story} chapter={Math.max(1, at)} />
+          <StoryActions story={story} />
         </div>
       </section>
 

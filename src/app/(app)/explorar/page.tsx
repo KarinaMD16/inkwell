@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Explorer } from "@/components/Explorer";
-import { getStories } from "@/lib/data";
+import { getStories } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Explorar" };
 
-export default function Explorar() {
+export default async function Explorar() {
+  const stories = await getStories();
   return (
     <Suspense fallback={<p className="muted">Acomodando los estantes…</p>}>
-      <Explorer stories={getStories()} />
+      <Explorer stories={stories} />
     </Suspense>
   );
 }
