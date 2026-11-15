@@ -9,6 +9,7 @@ import { SessionProvider } from "@/components/SessionProvider";
 export const metadata: Metadata = {
   title: { default: "Inkwell", template: "%s · Inkwell" },
   description: "Lee y escribe historias sin anuncios en el texto. Fanfics, AU y más.",
+  icons: { icon: "/inkwell-inverse.svg", shortcut: "/inkwell-inverse.svg", apple: "/inkwell-inverse.svg" },
 };
 export const viewport: Viewport = { themeColor: "#0F8B80" };
 
