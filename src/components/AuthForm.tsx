@@ -3,9 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { api } from "@/lib/api";
+import { isNewAccount } from "@/lib/newAccount";
+import { authHref, safeNext } from "@/lib/next";
 import { supabase } from "@/lib/supabase";
+import { claveNuevaSchema, entrarSchema, recuperarSchema, registroSchema, validate, type FieldErrors } from "@/lib/validation";
+import { Checkbox } from "./Checkbox";
+import { DateField } from "./DateField";
 import { GoogleSignIn } from "./GoogleSignIn";
+import { Icon } from "./Icon";
 import { useSession } from "./SessionProvider";
 import { Btn } from "./ui";
 
@@ -16,15 +23,18 @@ const COPY: Record<Mode, { title: string; lead: string; submit: string }> = {
   registro: { title: "Crea tu cuenta", lead: "Leer no pide cuenta. La necesitas para comentar, votar, guardar historias y publicar las tuyas.", submit: "Crear cuenta" },
   recuperar: { title: "Recupera tu contraseña", lead: "Escribe tu correo y te mandamos un enlace para crear una nueva.", submit: "Enviar enlace" },
 };
-const NEW_PASSWORD = { title: "Crea tu contraseña nueva", lead: "Escríbela una vez y queda cambiada.", submit: "Guardar contraseña" };
+const NEW_PASSWORD = { title: "Crea tu contraseña nueva", lead: "Escríbela dos veces y queda cambiada.", submit: "Guardar contraseña" };
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+/** Campo con su etiqueta, su ayuda y su error. El error reemplaza a la ayuda y lo anuncian los lectores de pantalla. */
+function Field({ id, label, hint, error, children }: { id: string; label: string; hint?: string; error?: string; children: ReactNode }) {
   return (
-    <label className="field">
-      <span className="field__label">{label}</span>
+    <div className="field">
+      <label className="field__label" htmlFor={id}>{label}</label>
       {children}
-      {hint && <span className="muted small">{hint}</span>}
-    </label>
+      {error
+        ? <span className="field__error" id={`${id}-msg`} role="alert"><Icon name="alert" size={16} stroke={2.2} />{error}</span>
+        : hint && <span className="muted small" id={`${id}-msg`}>{hint}</span>}
+    </div>
   );
 }
 
@@ -44,11 +54,14 @@ function GoogleLogo() {
 function explain(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   const m = message.toLowerCase();
+  // Llave pública mal puesta en .env (NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY): es un problema de configuración, no de la persona.
+  if (m.includes("invalid api key") || m.includes("no api key")) return "El servicio de cuentas no está disponible en este momento. Intenta más tarde.";
   if (m.includes("invalid login credentials")) return "Correo o contraseña incorrectos.";
   if (m.includes("email not confirmed")) return "Todavía no confirmas tu correo. Busca el mensaje de Inkwell y abre el enlace.";
   if (m.includes("already registered")) return "Ese correo ya tiene cuenta. Prueba entrar.";
   if (m.includes("rate limit") || m.includes("security purposes")) return "Demasiados intentos seguidos. Espera unos minutos y prueba de nuevo.";
   if (m.includes("different from the old password")) return "La contraseña nueva tiene que ser distinta de la anterior.";
+  if (m.includes("expired") || m.includes("invalid") && m.includes("link")) return "Ese enlace ya venció o ya se usó. Pide uno nuevo.";
   if (m.includes("password")) return "Esa contraseña no sirve: usa al menos 8 caracteres.";
   if (m.includes("failed to fetch") || m.includes("network")) return "No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.";
   return `No se pudo completar: ${message}`;
@@ -64,53 +77,117 @@ async function googleEnabled(): Promise<boolean> {
 }
 
 /**
- * Formularios de acceso, conectados a Supabase Auth (correo y Google). La sesión queda
- * en el navegador y SessionProvider se entera sola del cambio.
+ * Formularios de acceso, conectados a Supabase Auth (correo y Google). Los datos se validan
+ * con zod antes de enviarse y cada error aparece junto a su campo. La sesión queda en el
+ * navegador y SessionProvider se entera sola del cambio.
  */
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const { session, profile, signOut } = useSession();
+  const formRef = useRef<HTMLFormElement>(null);
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
+  /** Correo que todavía no confirmó su cuenta: habilita "Reenviar correo". */
+  const [pending, setPending] = useState("");
+  const [resent, setResent] = useState(false);
+  /** Registro enviado: en lugar del formulario se muestra "Revisa tu correo". */
+  const [sentTo, setSentTo] = useState<{ email: string; again: boolean } | null>(null);
+  /** Página a la que se vuelve después de entrar (?next=/ruta). */
+  const [next, setNext] = useState<string | null>(null);
   // Con sesión abierta (enlace del correo o "cambiar contraseña" en ajustes), /recuperar pide la contraseña nueva.
   const newPassword = mode === "recuperar" && Boolean(session);
-  const already = Boolean(session) && mode !== "recuperar";
+  const already = Boolean(session) && mode !== "recuperar" && !busy;
   const copy = newPassword ? NEW_PASSWORD : COPY[mode];
+  const home = mode === "registro" ? "/bienvenida" : "/";
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- la dirección solo existe en el navegador
+    setNext(safeNext(new URLSearchParams(location.search).get("next")));
+    // Un enlace de correo vencido vuelve con el motivo después del "#".
+    const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
+    const problem = hash.get("error_description") ?? hash.get("error_code");
+    if (problem) {
+      setError(explain(new Error(problem.replace(/\+/g, " "))));
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  }, []);
+
+  /** Quita el error de un campo en cuanto la persona lo corrige. */
+  function clear(field: string) {
+    if (errors[field]) setErrors((all) => Object.fromEntries(Object.entries(all).filter(([key]) => key !== field)));
+  }
+  function fail(found: FieldErrors) {
+    setErrors(found);
+    const first = Object.keys(found)[0];
+    const target = formRef.current?.querySelector<HTMLElement>(`[name="${first}"]:not([type="hidden"]), [data-field="${first}"] button`);
+    target?.focus();
+  }
+  const invalid = (field: string) => ({ "aria-invalid": errors[field] ? true : undefined, "aria-describedby": `${field}-msg` });
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (busy) return;
-    const form = new FormData(e.currentTarget);
-    const email = String(form.get("correo") ?? "").trim();
-    const password = String(form.get("clave") ?? "");
+    const values = Object.fromEntries(new FormData(e.currentTarget));
     const auth = supabase().auth;
-    setBusy(true);
     setError("");
     setDone("");
+    setPending("");
+    setResent(false);
+
+    const schema = newPassword ? claveNuevaSchema : mode === "entrar" ? entrarSchema : mode === "registro" ? registroSchema : recuperarSchema;
+    const checked = validate<Record<string, string>>(schema, values);
+    if (!checked.ok) return fail(checked.errors);
+    setErrors({});
+    const { correo: email, clave: password, usuario: handle, nacimiento } = checked.data;
+
+    setBusy(true);
+    let leaving = false; // al cambiar de página el botón se queda en "Un momento…"
     try {
       if (newPassword) {
         const { error } = await auth.updateUser({ password });
         if (error) throw error;
         setDone("Contraseña cambiada.");
+        formRef.current?.reset();
       } else if (mode === "entrar") {
         const { error } = await auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        router.push("/");
+        if (error) {
+          if (error.message.toLowerCase().includes("email not confirmed")) setPending(email);
+          throw error;
+        }
+        leaving = true;
+        router.replace(next ?? home);
+        return;
       } else if (mode === "registro") {
-        const handle = String(form.get("usuario") ?? "").trim().toLowerCase();
+        // El nombre de usuario se revisa antes de crear la cuenta, para no descubrirlo ocupado después.
+        const taken = await api(`/profiles/${encodeURIComponent(handle)}`).then(() => true, () => false);
+        if (taken) return fail({ usuario: "Ese nombre de usuario ya está en uso. Prueba con otro." });
         const { data, error } = await auth.signUp({
           email,
           password,
           // El nombre de usuario se aplica al perfil la primera vez que la persona entra (ver SessionProvider).
-          options: { data: { handle, birthdate: String(form.get("nacimiento") ?? "") }, emailRedirectTo: `${location.origin}/bienvenida` },
+          options: { data: { handle, birthdate: nacimiento }, emailRedirectTo: `${location.origin}/bienvenida` },
         });
         if (error) throw error;
         // Con confirmación por correo, un correo ya registrado no da error: devuelve un usuario sin identidades.
-        if (data.user && data.user.identities?.length === 0) throw new Error("User already registered");
-        if (data.session) router.push("/bienvenida");
-        else setDone(`Te mandamos un correo a ${email}. Abre el enlace para confirmar tu cuenta y después entra.`);
+        if (data.user && data.user.identities?.length === 0) return fail({ correo: "Ese correo ya tiene cuenta. Prueba entrar." });
+        // Si el correo ya se había registrado pero falta confirmarlo, Supabase no da error: reenvía el
+        // correo y deja la cuenta como estaba (mismo usuario y misma contraseña). Se nota porque la
+        // cuenta se creó antes que este envío; las dos fechas vienen del mismo servidor.
+        const sent = Date.parse(data.user?.confirmation_sent_at ?? "");
+        const created = Date.parse(data.user?.created_at ?? "");
+        if (sent - created > 10_000) {
+          setSentTo({ email, again: true });
+          return;
+        }
+        if (data.session) {
+          leaving = true;
+          router.replace(home);
+          return;
+        }
+        setSentTo({ email, again: false });
       } else {
         const { error } = await auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/recuperar` });
         if (error) throw error;
@@ -119,8 +196,30 @@ export function AuthForm({ mode }: { mode: Mode }) {
     } catch (err) {
       setError(explain(err));
     } finally {
-      setBusy(false);
+      if (!leaving) setBusy(false);
     }
+  }
+
+  /** Después de entrar con Google: las cuentas nuevas pasan por el onboarding, las demás siguen de largo. */
+  async function afterGoogle() {
+    setBusy(true);
+    const { data } = await supabase().auth.getSession();
+    router.replace(isNewAccount(data.session?.user) ? "/bienvenida" : next ?? "/");
+  }
+
+  async function resend() {
+    const to = sentTo?.email ?? pending;
+    if (!to || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const { error } = await supabase().auth.resend({ type: "signup", email: to, options: { emailRedirectTo: `${location.origin}/bienvenida` } });
+      if (error) throw error;
+      setResent(true);
+    } catch (err) {
+      setError(explain(err));
+    }
+    setBusy(false);
   }
 
   /**
@@ -140,7 +239,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       }
       const { error } = await supabase().auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${location.origin}${mode === "registro" ? "/bienvenida" : "/"}`, queryParams: { prompt: "select_account" } },
+        options: { redirectTo: `${location.origin}${next ?? home}`, queryParams: { prompt: "select_account" } },
       });
       if (error) throw error;
       // Sin error, el navegador ya está saliendo hacia Google.
@@ -165,17 +264,35 @@ export function AuthForm({ mode }: { mode: Mode }) {
       </div>
 
       <main className="welcome__main">
-        {already ? (
+        {sentTo ? (
+          <div className="authcard">
+            <div className="stack-sm">
+              <h1 className="h-hero">Revisa tu correo</h1>
+              <p className="muted lead">
+                {sentTo.again
+                  ? `Ya habías empezado a crear una cuenta con ${sentTo.email} y falta confirmarla. Te reenviamos el enlace: ábrelo y entra con el usuario y la contraseña que pusiste la primera vez.`
+                  : `Te mandamos un enlace a ${sentTo.email}. Ábrelo para confirmar tu cuenta y después entra.`}
+              </p>
+            </div>
+            {error && <p className="notice notice--error" role="alert">{error}</p>}
+            <p className="notice" role="status">
+              {resent ? "Listo, lo reenviamos. Revisa también la carpeta de spam." : "¿No te llegó?"}{" "}
+              {!resent && <button type="button" className="linkbtn" onClick={resend} disabled={busy}>Reenviar correo</button>}
+            </p>
+            <Btn href={authHref("/entrar", next)} wide size="lg">Ya lo confirmé, entrar</Btn>
+            <button type="button" className="linkbtn" onClick={() => { setSentTo(null); setResent(false); setError(""); }}>Usar otro correo</button>
+          </div>
+        ) : already ? (
           <div className="authcard">
             <div className="stack-sm">
               <h1 className="h-hero">Ya entraste</h1>
               <p className="muted lead">Estás en tu cuenta{profile ? ` como @${profile.handle}` : ""}.</p>
             </div>
-            <Btn href="/" wide size="lg">Ir al inicio</Btn>
+            <Btn href={next ?? "/"} wide size="lg">{next ? "Seguir donde estabas" : "Ir al inicio"}</Btn>
             <Btn variant="ghost" wide onClick={signOut}>Cerrar sesión</Btn>
           </div>
         ) : (
-          <form className="authcard" onSubmit={submit}>
+          <form ref={formRef} className="authcard" onSubmit={submit} noValidate>
             <div className="stack-sm">
               <h1 className="h-hero">{copy.title}</h1>
               <p className="muted lead">{copy.lead}</p>
@@ -184,7 +301,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             {mode !== "recuperar" && (
               <>
                 <GoogleSignIn
-                  onSignedIn={() => router.push(mode === "registro" ? "/bienvenida" : "/")}
+                  onSignedIn={afterGoogle}
                   onError={(err) => setError(explain(err))}
                   fallback={(
                     <button type="button" className="googlebtn" onClick={google} disabled={busy} aria-label="Continuar con Google" title="Continuar con Google">
@@ -197,42 +314,61 @@ export function AuthForm({ mode }: { mode: Mode }) {
             )}
 
             {mode === "registro" && (
-              <Field label="Nombre de usuario" hint="Letras, números, punto y guion bajo. Así te verán: @tu.nombre">
-                <input className="input" name="usuario" required minLength={3} maxLength={24} pattern="[A-Za-z0-9._]+" autoComplete="username" />
+              <Field id="usuario" label="Nombre de usuario" error={errors.usuario} hint="Letras, números, punto y guion bajo. Así te verán: @tu.nombre">
+                <span className={`input input--with${errors.usuario ? " is-invalid" : ""}`}>
+                  <span className="muted" aria-hidden="true">@</span>
+                  <input id="usuario" name="usuario" maxLength={24} autoComplete="username" autoCapitalize="none" spellCheck={false} onChange={() => clear("usuario")} {...invalid("usuario")} />
+                </span>
               </Field>
             )}
             {!newPassword && (
-              <Field label="Correo">
-                <input className="input" type="email" name="correo" required autoComplete="email" />
+              <Field id="correo" label="Correo" error={errors.correo}>
+                <input id="correo" className={`input${errors.correo ? " is-invalid" : ""}`} type="email" name="correo" autoComplete="email" inputMode="email" onChange={() => clear("correo")} {...invalid("correo")} />
               </Field>
             )}
             {(mode !== "recuperar" || newPassword) && (
-              <Field label={newPassword ? "Contraseña nueva" : "Contraseña"} hint={mode === "entrar" ? undefined : "Mínimo 8 caracteres."}>
-                <span className="input input--with">
-                  <input type={show ? "text" : "password"} name="clave" required minLength={8} autoComplete={mode === "entrar" ? "current-password" : "new-password"} />
+              <Field id="clave" label={newPassword ? "Contraseña nueva" : "Contraseña"} error={errors.clave} hint={mode === "entrar" ? undefined : "Mínimo 8 caracteres."}>
+                <span className={`input input--with${errors.clave ? " is-invalid" : ""}`}>
+                  <input id="clave" type={show ? "text" : "password"} name="clave" autoComplete={mode === "entrar" ? "current-password" : "new-password"} onChange={() => clear("clave")} {...invalid("clave")} />
                   <button type="button" className="linkbtn" onClick={() => setShow((v) => !v)} aria-pressed={show}>{show ? "Ocultar" : "Mostrar"}</button>
                 </span>
               </Field>
             )}
+            {newPassword && (
+              <Field id="repetir" label="Repite la contraseña" error={errors.repetir}>
+                <input id="repetir" className={`input${errors.repetir ? " is-invalid" : ""}`} type={show ? "text" : "password"} name="repetir" autoComplete="new-password" onChange={() => clear("repetir")} {...invalid("repetir")} />
+              </Field>
+            )}
             {mode === "registro" && (
               <>
-                <Field label="Fecha de nacimiento" hint="La usamos solo para mostrarte contenido apto para tu edad.">
-                  <input className="input" type="date" name="nacimiento" required />
-                </Field>
-                <label className="check">
-                  <input type="checkbox" required />
-                  <span>Acepto los <Link href="/terminos">términos</Link> y la <Link href="/privacidad">política de privacidad</Link>.</span>
-                </label>
+                <div data-field="nacimiento">
+                  <Field id="nacimiento" label="Fecha de nacimiento" error={errors.nacimiento} hint="La usamos solo para mostrarte contenido apto para tu edad.">
+                    <DateField name="nacimiento" label="Fecha de nacimiento" invalid={Boolean(errors.nacimiento)} describedBy="nacimiento-msg" onChange={() => clear("nacimiento")} />
+                  </Field>
+                </div>
+                <div className="field">
+                  <label className="check">
+                    <Checkbox name="acepta" onChange={() => clear("acepta")} {...invalid("acepta")} />
+                    <span>Acepto los <Link href="/terminos">términos</Link> y la <Link href="/privacidad">política de privacidad</Link>.</span>
+                  </label>
+                  {errors.acepta && <span className="field__error" id="acepta-msg" role="alert"><Icon name="alert" size={16} stroke={2.2} />{errors.acepta}</span>}
+                </div>
               </>
             )}
 
-            {error && <p className="notice" role="alert">{error}</p>}
+            {error && <p className="notice notice--error" role="alert">{error}</p>}
             {done && <p className="notice" role="status">{done}{newPassword && <> <Link href="/">Ir al inicio</Link></>}</p>}
+            {pending && (
+              <p className="notice" role="status">
+                {resent ? `Listo: reenviamos el correo a ${pending}. Revisa también la carpeta de spam.` : "¿No te llegó el correo de confirmación?"}{" "}
+                {!resent && <button type="button" className="linkbtn" onClick={resend} disabled={busy}>Reenviar correo</button>}
+              </p>
+            )}
             <Btn type="submit" wide size="lg" disabled={busy}>{busy ? "Un momento…" : copy.submit}</Btn>
 
             <div className="row between wrap">
-              {mode === "entrar" && (<><Link href="/recuperar" className="textlink">Olvidé mi contraseña</Link><Link href="/registro" className="textlink">Crear cuenta</Link></>)}
-              {mode === "registro" && (<><Link href="/" className="textlink">Ahora no, seguir leyendo</Link><Link href="/entrar" className="textlink">Ya tengo cuenta</Link></>)}
+              {mode === "entrar" && (<><Link href="/recuperar" className="textlink">Olvidé mi contraseña</Link><Link href={authHref("/registro", next)} className="textlink">Crear cuenta</Link></>)}
+              {mode === "registro" && (<><Link href={next ?? "/"} className="textlink">Ahora no, seguir leyendo</Link><Link href={authHref("/entrar", next)} className="textlink">Ya tengo cuenta</Link></>)}
               {mode === "recuperar" && !newPassword && <Link href="/entrar" className="textlink">Volver a entrar</Link>}
               {newPassword && <Link href="/ajustes" className="textlink">Volver a ajustes</Link>}
             </div>

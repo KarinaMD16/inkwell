@@ -37,16 +37,24 @@ const PATHS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   ball: '<circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.500 5h-5L8 10z"/>',
   smile: '<circle cx="12" cy="12" r="9"/><path d="M8.500 14c1 1.500 6 1.500 7 0M9 9.500h.01M15 9.500h.01"/>',
+  chevron: '<path d="M6 9l6 6 6-6"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.500v5.500M12 16.500h.01"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;
 
+// pathLength="1" deja cada trazo con largo 1: así una animación puede dibujarlo de 0 a 1
+// sin medir nada (ver "animaciones de íconos" en globals.css).
+const DRAWABLE = Object.fromEntries(
+  Object.entries(PATHS).map(([name, svg]) => [name, svg.replace(/<(path|circle|rect)\b/g, '<$1 pathLength="1"')]),
+) as Record<IconName, string>;
+
 export function Icon({ name, size = 20, stroke = 1.8 }: { name: IconName; size?: number; stroke?: number }) {
   return (
     <svg
-      aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      aria-hidden="true" className="icon" data-icon={name} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none" }}
-      dangerouslySetInnerHTML={{ __html: PATHS[name] }}
+      dangerouslySetInnerHTML={{ __html: DRAWABLE[name] }}
     />
   );
 }

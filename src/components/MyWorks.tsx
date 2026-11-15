@@ -2,6 +2,7 @@
 
 import { fmt, type MyStory } from "@/lib/data";
 import { useMyStories } from "@/lib/useMyStories";
+import { useAuthHref } from "@/lib/useAuthHref";
 import { Book } from "./Book";
 import { Icon, type IconName } from "./Icon";
 import { Btn, Chip } from "./ui";
@@ -19,6 +20,7 @@ function note(s: MyStory): string {
 
 /** El panel de escritura: la historia más reciente, totales reales y la lista de historias propias. */
 export function MyWorks() {
+  const auth = useAuthHref();
   const { loaded, signedIn, stories, error } = useMyStories();
 
   if (!loaded) return <p className="muted">Buscando tus cuadernos…</p>;
@@ -27,7 +29,7 @@ export function MyWorks() {
       <div className="empty">
         <h2 className="h-sec">Entra para escribir</h2>
         <p className="muted">Tus historias y borradores viven en tu cuenta.</p>
-        <div className="row wrap"><Btn href="/entrar">Entrar</Btn><Btn variant="ghost" href="/registro">Crear cuenta</Btn></div>
+        <div className="row wrap"><Btn href={auth.entrar}>Entrar</Btn><Btn variant="ghost" href={auth.registro}>Crear cuenta</Btn></div>
       </div>
     );
   }

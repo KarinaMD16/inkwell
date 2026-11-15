@@ -5,6 +5,7 @@ import "@fontsource-variable/literata";
 import "@fontsource-variable/literata/wght-italic.css";
 import "./globals.css";
 import { SessionProvider } from "@/components/SessionProvider";
+import { SmoothScroll } from "@/components/SmoothScroll";
 
 export const metadata: Metadata = {
   title: { default: "Inkwell", template: "%s · Inkwell" },
@@ -16,7 +17,7 @@ export const viewport: Viewport = { themeColor: "#0F8B80" };
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es">
-      <body><SessionProvider>{children}</SessionProvider></body>
+      <body><SmoothScroll /><SessionProvider>{children}</SessionProvider></body>
     </html>
   );
 }

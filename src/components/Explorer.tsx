@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { genres, lengthOf, type Story } from "@/lib/data";
 import { MiniBook } from "./Book";
 import { Icon, type IconName } from "./Icon";
+import { Select } from "./Select";
 import { ShelfCard, StoryRow } from "./StoryCard";
 import { Btn } from "./ui";
 
@@ -32,6 +33,7 @@ const SHELVES: { label: string; genre: string | null; color: string; ink: string
   { label: "Deportes", genre: "Deportes", color: "#F28C38", ink: "#14152B", icon: "ball" },
 ];
 
+const SORTS = [{ value: "votos", label: "Más votadas" }, { value: "recientes", label: "Recién actualizadas" }, { value: "lecturas", label: "Más leídas" }];
 const uniq = (xs: string[]) => Array.from(new Set(xs)).sort((a, b) => a.localeCompare(b, "es"));
 
 export function Explorer({ stories }: { stories: Story[] }) {
@@ -151,20 +153,17 @@ export function Explorer({ stories }: { stories: Story[] }) {
                 <button type="button" aria-pressed={!compact} onClick={() => setCompact(false)}><Icon name="grid" size={18} />Libros</button>
                 <button type="button" aria-pressed={compact} onClick={() => setCompact(true)}><Icon name="list" size={18} />Compacta</button>
               </div>
-              <label className="select">
-                <span className="muted small">Ordenar</span>
-                <select value={sort} onChange={(e) => setSort(e.target.value)}>
-                  <option value="votos">Más votadas</option>
-                  <option value="recientes">Recién actualizadas</option>
-                  <option value="lecturas">Más leídas</option>
-                </select>
-              </label>
+              <div className="select">
+                <span className="muted small" aria-hidden="true">Ordenar</span>
+                <Select compact label="Ordenar" value={sort} onChange={setSort} options={SORTS} />
+              </div>
             </div>
           </div>
 
           <label className="searchpill searchpill--inline">
             <Icon name="search" />
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Título, autor o etiqueta" aria-label="Buscar en los resultados" />
+            {q && <button type="button" className="searchclear" aria-label="Borrar la búsqueda" onClick={() => setQ("")}><Icon name="x" size={18} /></button>}
           </label>
 
           {active.length > 0 && (

@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
 import { genres, type Art, type Rating, type Story } from "@/lib/data";
+import { useAuthHref } from "@/lib/useAuthHref";
 import { useSession } from "./SessionProvider";
 import { Book } from "./Book";
 import { Icon } from "./Icon";
+import { Select } from "./Select";
 import { Board, Spine } from "./Shelf";
 import { Btn } from "./ui";
 
@@ -22,6 +24,7 @@ const RATINGS: Rating[] = ["Todo público", "+13", "+16", "+18"];
 
 /** Crear una historia. La portada subida se acomoda a la tapa del libro en vivo. */
 export function NewStoryForm() {
+  const auth = useAuthHref();
   const [title, setTitle] = useState("");
   const [tagline, setTagline] = useState("");
   const [synopsis, setSynopsis] = useState("");
@@ -82,9 +85,9 @@ export function NewStoryForm() {
         </label>
 
         <div className="formgrid">
-          <label className="field"><span className="field__label">Género</span>
-            <select className="input" value={genre} onChange={(e) => setGenre(e.target.value)}>{genres.map((g) => <option key={g}>{g}</option>)}</select>
-          </label>
+          <div className="field"><span className="field__label" aria-hidden="true">Género</span>
+            <Select label="Género" value={genre} onChange={setGenre} options={genres.map((g) => ({ value: g, label: g }))} />
+          </div>
           <label className="field"><span className="field__label">Fandom</span>
             <input className="input" value={fandom} onChange={(e) => setFandom(e.target.value)} placeholder="Original" />
           </label>
@@ -118,7 +121,7 @@ export function NewStoryForm() {
         </fieldset>
 
         {cover && <p className="muted small">La imagen es solo una vista previa: subir portadas todavía no está en la API, así que la historia se crea con la portada generada.</p>}
-        {ready && !token && <p className="notice" role="status">Para crear una historia necesitas tu cuenta. <Link href="/entrar">Entrar</Link></p>}
+        {ready && !token && <p className="notice" role="status">Para crear una historia necesitas tu cuenta. <Link href={auth.entrar}>Entrar</Link></p>}
         {error && <p className="notice" role="alert">{error}</p>}
         <div className="row wrap"><Btn type="submit" size="lg" icon="arrow" disabled={busy}>{busy ? "Creando…" : "Crear y escribir el primer capítulo"}</Btn><Btn variant="ghost" href="/escribir">Cancelar</Btn></div>
       </div>

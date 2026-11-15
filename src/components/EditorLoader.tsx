@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { ChapterMeta } from "@/lib/data";
 import { useMyStories } from "@/lib/useMyStories";
+import { useAuthHref } from "@/lib/useAuthHref";
 import { EditorView } from "./EditorView";
 import { Btn } from "./ui";
 
@@ -17,6 +18,7 @@ function Message({ title, children }: { title: string; children: React.ReactNode
  * Va en el navegador porque un borrador solo lo puede ver quien lo escribe.
  */
 export function EditorLoader() {
+  const auth = useAuthHref();
   const { slug } = useParams<{ slug: string }>();
   const { loaded, signedIn, stories, error } = useMyStories();
   const [chapters, setChapters] = useState<{ slug: string; list: ChapterMeta[] } | null>(null);
@@ -35,7 +37,7 @@ export function EditorLoader() {
 
   if (!loaded) return <Message title="Abriendo tu cuaderno…">{null}</Message>;
   if (!signedIn) {
-    return <Message title="Entra para escribir"><p className="muted">El editor necesita tu cuenta.</p><Btn href="/entrar">Entrar</Btn></Message>;
+    return <Message title="Entra para escribir"><p className="muted">El editor necesita tu cuenta.</p><Btn href={auth.entrar}>Entrar</Btn></Message>;
   }
   if (error) return <Message title="No pudimos abrir el editor"><p className="muted">Revisa que la API esté encendida y recarga.</p></Message>;
   if (!story) {

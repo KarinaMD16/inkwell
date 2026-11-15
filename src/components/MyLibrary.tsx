@@ -2,6 +2,7 @@
 
 import type { Story } from "@/lib/data";
 import { useLibrary } from "@/lib/useLibrary";
+import { useAuthHref } from "@/lib/useAuthHref";
 import { LibraryView, type LibItem } from "./LibraryView";
 import { Btn } from "./ui";
 
@@ -10,6 +11,7 @@ import { Btn } from "./ui";
  * guardadas (sin empezar), leyendo y terminadas, según el capítulo por el que va.
  */
 export function MyLibrary({ stories, listName, listStories }: { stories: Story[]; listName: string; listStories: Story[] }) {
+  const auth = useAuthHref();
   const { loaded, signedIn, entries } = useLibrary();
 
   if (!loaded) return <p className="muted">Sacando los libros de la repisa…</p>;
@@ -18,7 +20,7 @@ export function MyLibrary({ stories, listName, listStories }: { stories: Story[]
       <div className="empty">
         <h1 className="h-hero">Tu librero</h1>
         <p className="muted">Entra para ver las historias que guardaste y por dónde vas en cada una.</p>
-        <div className="row wrap"><Btn href="/entrar">Entrar</Btn><Btn variant="ghost" href="/registro">Crear cuenta</Btn></div>
+        <div className="row wrap"><Btn href={auth.entrar}>Entrar</Btn><Btn variant="ghost" href={auth.registro}>Crear cuenta</Btn></div>
       </div>
     );
   }

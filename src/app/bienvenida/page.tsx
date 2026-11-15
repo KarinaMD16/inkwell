@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { OnboardingPicker } from "@/components/OnboardingPicker";
+import { WelcomeGuard } from "@/components/WelcomeGuard";
 
 export const metadata: Metadata = { title: "Bienvenida" };
 
 export default function Bienvenida() {
   return (
     <div className="welcome">
+      <WelcomeGuard />
       <div className="welcome__brand">
         <div className="row" style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 26 }}>
           <Image src="/inkwell-mark-paper.svg" alt="" width={56} height={56} />Inkwell
@@ -19,7 +21,7 @@ export default function Bienvenida() {
       </div>
       <main className="welcome__main">
         <div className="stack-lg" style={{ width: "100%", maxWidth: 720 }}>
-          <div className="row"><div className="steps" role="img" aria-label="Paso 2 de 3"><span className="is-on" /><span className="is-on" /><span /></div><span className="muted small">Paso 2 de 3</span></div>
+          <div className="row"><div className="steps" role="img" aria-label="Paso 2 de 2"><span className="is-on" /><span className="is-on" /></div><span className="muted small">Paso 2 de 2</span></div>
           <div><h1 className="h-hero">¿Qué te gusta leer?</h1><p className="muted lead">Con eso armamos tu escritorio y tus estantes.</p></div>
           <OnboardingPicker />
         </div>

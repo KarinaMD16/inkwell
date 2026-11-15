@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Story } from "@/lib/data";
 import { useLibrary } from "@/lib/useLibrary";
+import { useAuthHref } from "@/lib/useAuthHref";
 import { Icon } from "./Icon";
 import { IconBtn } from "./ui";
 
@@ -13,6 +14,7 @@ import { IconBtn } from "./ui";
  */
 export function StoryActions({ story }: { story: Story }) {
   const router = useRouter();
+  const auth = useAuthHref();
   const library = useLibrary();
   const [opening, setOpening] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -23,7 +25,7 @@ export function StoryActions({ story }: { story: Story }) {
   const href = `/leer/${story.slug}/${chapter}`;
 
   async function toggleShelf() {
-    if (!library.signedIn) return router.push("/entrar");
+    if (!library.signedIn) return router.push(auth.entrar);
     if (busy) return;
     setBusy(true);
     try {

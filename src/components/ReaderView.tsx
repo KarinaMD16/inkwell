@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { Block, ChapterMeta, Story } from "@/lib/data";
+import { useAuthHref } from "@/lib/useAuthHref";
 import { useSession } from "./SessionProvider";
 import { Book } from "./Book";
 import { Icon } from "./Icon";
@@ -26,6 +27,7 @@ export function ReaderView({ story, chapter, total, blocks }: { story: Story; ch
   const [voting, setVoting] = useState(false);
   const [progress, setProgress] = useState(0);
   const router = useRouter();
+  const auth = useAuthHref();
   const { token } = useSession();
   const signedIn = Boolean(token);
 
@@ -37,7 +39,7 @@ export function ReaderView({ story, chapter, total, blocks }: { story: Story; ch
   }, [signedIn, story.slug, chapter.n]);
 
   async function vote() {
-    if (!token) return router.push("/entrar");
+    if (!token) return router.push(auth.entrar);
     if (voting) return;
     setVoting(true);
     try {
@@ -140,7 +142,7 @@ export function ReaderView({ story, chapter, total, blocks }: { story: Story; ch
                 <div key={i} className="para">
                   <p>{b.text}</p>
                   {b.comments ? (
-                    <Link href="/registro" className="para__comments" aria-label={`${b.comments} comentarios en este párrafo`}>
+                    <Link href={auth.registro} className="para__comments" aria-label={`${b.comments} comentarios en este párrafo`}>
                       <Icon name="chat" size={15} />{b.comments}
                     </Link>
                   ) : null}
@@ -173,7 +175,7 @@ export function ReaderView({ story, chapter, total, blocks }: { story: Story; ch
         <footer className="reader__end">
           <div className="row">
             <Btn variant="ghost" icon="heart" ariaPressed={voted} onClick={vote}>{voted ? "Votado" : "Votar"}</Btn>
-            <Btn variant="ghost" icon="chat" href="/registro">Comentar</Btn>
+            <Btn variant="ghost" icon="chat" href={auth.registro}>Comentar</Btn>
           </div>
           {next ? <Btn href={next} icon="arrow">Siguiente capítulo</Btn> : <Btn href={`/historia/${story.slug}`} variant="ink">Volver a la ficha</Btn>}
         </footer>

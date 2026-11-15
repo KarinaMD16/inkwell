@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { colorFor } from "@/lib/data";
+import { useAuthHref } from "@/lib/useAuthHref";
 import { Icon, type IconName } from "./Icon";
 import { useSession } from "./SessionProvider";
 import { Avatar, Btn, IconBtn } from "./ui";
@@ -20,6 +21,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const { ready, session, profile, signOut } = useSession();
+  const auth = useAuthHref();
   const isOn = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   return (
     <div className="shell">
@@ -42,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </nav>
       <div className="shell__main">
         <header className="topbar">
-          <form className="searchpill" action="/explorar" role="search">
+          <form className="searchpill" action="/explorar" role="search" data-anim>
             <Icon name="search" />
             <input name="q" type="search" placeholder="Busca historias, autores o etiquetas" aria-label="Buscar" />
           </form>
@@ -54,14 +56,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Avatar letter={profile.name[0].toUpperCase()} color={colorFor(profile.handle)} />
               </Link>
             ) : ready && !session ? (
-              <Btn href="/entrar">Entrar</Btn>
+              <Btn href={auth.entrar}>Entrar</Btn>
             ) : null}
           </div>
         </header>
         <main className="content">{children}</main>
         <footer className="foot">
           <span>Inkwell · by Koral Studio</span>
-          {session ? <button type="button" className="linkbtn" onClick={signOut}>Cerrar sesión</button> : <Link href="/entrar">Entrar</Link>}
+          {session ? <button type="button" className="linkbtn" onClick={signOut}>Cerrar sesión</button> : <Link href={auth.entrar}>Entrar</Link>}
           <Link href="/privacidad">Privacidad</Link>
           <Link href="/terminos">Términos</Link>
         </footer>

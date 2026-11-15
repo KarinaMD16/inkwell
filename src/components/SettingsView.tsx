@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import { useAuthHref } from "@/lib/useAuthHref";
 import { Icon } from "./Icon";
 import { useSession } from "./SessionProvider";
 import { Btn, Leader } from "./ui";
@@ -23,6 +24,7 @@ export function SettingsView() {
   const [s, setS] = useState<Settings>(DEFAULTS);
   const [tag, setTag] = useState("");
   const { ready, session, profile, signOut } = useSession();
+  const auth = useAuthHref();
 
   useEffect(() => {
     try {
@@ -64,7 +66,7 @@ export function SettingsView() {
         ) : ready ? (
           <>
             <p className="muted">No has entrado a tu cuenta.</p>
-            <div className="row wrap"><Btn size="sm" href="/entrar">Entrar</Btn><Btn variant="ghost" size="sm" href="/registro">Crear cuenta</Btn></div>
+            <div className="row wrap"><Btn size="sm" href={auth.entrar}>Entrar</Btn><Btn variant="ghost" size="sm" href={auth.registro}>Crear cuenta</Btn></div>
           </>
         ) : null}
       </section>
@@ -103,7 +105,7 @@ export function SettingsView() {
       <section className="card">
         <div className="shelflabel">Sesión</div>
         <div className="row wrap">
-          <Btn variant="ink" href="/entrar">Cerrar sesión</Btn>
+          {session ? <Btn variant="ink" onClick={signOut}>Cerrar sesión</Btn> : <Btn variant="ink" href={auth.entrar}>Entrar</Btn>}
           <Link href="/privacidad" className="textlink">Privacidad</Link>
           <Link href="/terminos" className="textlink">Términos</Link>
         </div>

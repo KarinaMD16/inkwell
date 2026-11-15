@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Icon } from "./Icon";
 import { Btn } from "./ui";
+import { Checkbox } from "./Checkbox";
 
 const SAMPLE = [
   { title: "Capítulo 1: La mudanza", words: 1840, ok: true }, { title: "Capítulo 2: Reglas del edificio", words: 2105, ok: true },
@@ -30,7 +31,7 @@ export function ImportPanel() {
           <div className="stack-sm">
             {SAMPLE.map((c, i) => (
               <label key={c.title} className="detected">
-                <input type="checkbox" checked={checked[i]} onChange={() => setChecked((p) => p.map((v, j) => (j === i ? !v : v)))} />
+                <Checkbox checked={checked[i]} onChange={() => setChecked((p) => p.map((v, j) => (j === i ? !v : v)))} />
                 <b>{i + 1}</b><span style={{ flex: 1 }}>{c.title}</span><span className="muted small">{c.words.toLocaleString("es")} palabras</span>
               </label>
             ))}
