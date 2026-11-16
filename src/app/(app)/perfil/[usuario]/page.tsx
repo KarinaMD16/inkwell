@@ -1,22 +1,30 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ProfileButtons } from "@/components/ProfileButtons";
+import { ProfileHeader } from "@/components/ProfileHeader";
+import { ProfileSkeleton } from "@/components/Skeleton";
 import { ShelfCard } from "@/components/StoryCard";
-import { Avatar } from "@/components/ui";
 import { getAuthor, getAuthors, getStoriesBy } from "@/lib/queries";
 
 export async function generateStaticParams() {
   return (await getAuthors()).map((usuario) => ({ usuario }));
 }
 export async function generateMetadata({ params }: PageProps<"/perfil/[usuario]">): Promise<Metadata> {
-  return { title: `@${(await params).usuario}` };
+  const { usuario } = await params;
+  const author = await getAuthor(usuario);
+  if (!author) return { title: `@${usuario}` };
+  const images = author.avatarUrl ? [author.avatarUrl] : undefined;
+  return {
+    title: `${author.name} (@${author.handle})`,
+    description: author.bio || `Historias de @${author.handle} en Inkwell.`,
+    openGraph: { title: `${author.name} (@${author.handle})`, description: author.bio || undefined, images },
+  };
 }
 
 // La lectura de `params` va dentro de <Suspense>: así la navegación muestra el marco al instante.
 export default function Perfil({ params }: PageProps<"/perfil/[usuario]">) {
   return (
-    <Suspense fallback={<p className="muted">Buscando el perfil…</p>}>
+    <Suspense fallback={<ProfileSkeleton />}>
       <Autor params={params} />
     </Suspense>
   );
@@ -29,17 +37,7 @@ async function Autor({ params }: Pick<PageProps<"/perfil/[usuario]">, "params">)
 
   return (
     <div className="stack-lg">
-      <section className="profile">
-        <Avatar letter={author.name[0].toUpperCase()} color={author.color} size={120} />
-        <div className="stack-sm" style={{ flex: "1 1 300px", minWidth: 0 }}>
-          <h1 className="h-hero">{author.name}</h1>
-          <strong className="muted">@{author.handle}</strong>
-          <p className="prose">{author.bio}</p>
-          {/* Seguidores y siguiendo vuelven cuando la API tenga "seguir". */}
-          <div className="stats"><span><b>{works.length}</b>Historias</span></div>
-        </div>
-        <ProfileButtons handle={author.handle} />
-      </section>
+      <ProfileHeader author={author} works={works.length} />
 
       <section className="shelf">
         <div className="shelf__head"><div className="shelflabel">Historias · {works.length}</div></div>

@@ -4,6 +4,7 @@ import type { Story } from "@/lib/data";
 import { useLibrary } from "@/lib/useLibrary";
 import { useAuthHref } from "@/lib/useAuthHref";
 import { LibraryView, type LibItem } from "./LibraryView";
+import { LibrarySkeleton } from "./Skeleton";
 import { Btn } from "./ui";
 
 /**
@@ -14,7 +15,7 @@ export function MyLibrary({ stories, listName, listStories }: { stories: Story[]
   const auth = useAuthHref();
   const { loaded, signedIn, entries } = useLibrary();
 
-  if (!loaded) return <p className="muted">Sacando los libros de la repisa…</p>;
+  if (!loaded) return <LibrarySkeleton />;
   if (!signedIn) {
     return (
       <div className="empty">

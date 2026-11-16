@@ -3,9 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import { api } from "./api";
-import { toStory, type ApiStory, type MyStory } from "./data";
-
-type ApiMyStory = ApiStory & { published: boolean; totalChapters: number };
+import { toMyStory, type ApiMyStory, type MyStory } from "./data";
 
 /** Las historias de la persona que entró, publicadas o no. */
 export function useMyStories() {
@@ -17,7 +15,7 @@ export function useMyStories() {
     if (!token || !userId) return;
     let alive = true;
     api<ApiMyStory[]>("/me/stories", { token })
-      .then((list) => { if (alive) setState({ for: userId, stories: list.map((s) => ({ ...toStory(s), published: s.published, totalChapters: s.totalChapters })), error: false }); })
+      .then((list) => { if (alive) setState({ for: userId, stories: list.map(toMyStory), error: false }); })
       .catch(() => { if (alive) setState({ for: userId, stories: [], error: true }); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- se recarga solo al cambiar de persona

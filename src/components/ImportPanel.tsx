@@ -11,7 +11,10 @@ const SAMPLE = [
   { title: "Notas de la autora", words: 96, ok: false }, { title: "Capítulo 3: El 4B", words: 2430, ok: true }, { title: "Interludio", words: 610, ok: true },
 ];
 
-/** Interfaz de la importación .docx. La detección real de capítulos la hará la API (mammoth). */
+/**
+ * Interfaz de la importación .docx. Vive en la pantalla de capítulos de una historia: primero existe
+ * el libro y después se trae su contenido. La detección real de capítulos la hará la API (mammoth).
+ */
 export function ImportPanel() {
   const [file, setFile] = useState<string | null>(null);
   const [checked, setChecked] = useState(SAMPLE.map((c) => c.ok));
@@ -19,7 +22,7 @@ export function ImportPanel() {
     <section className="import" aria-label="Importar manuscrito">
       <div className="row">
         <Image src="/inkwell-mark.svg" alt="" width={64} height={64} />
-        <div><h2 className="h-sec">Importar desde Word</h2><span className="muted small">{file ?? "Sube tu .docx y detectamos los capítulos."}</span></div>
+        <div><h2 className="h-sec">Importar desde Word</h2><span className="muted small">{file ?? "¿Ya la tienes escrita? Sube tu .docx y detectamos los capítulos."}</span></div>
       </div>
       <label className="btn btn--ink btn--md btn--wide" style={{ cursor: "pointer" }}>
         <Icon name="upload" size={18} stroke={2} />{file ? "Subir otro archivo" : "Elegir archivo .docx"}
@@ -37,7 +40,7 @@ export function ImportPanel() {
             ))}
           </div>
           <p className="muted small">La detección real se conecta con la API. Por ahora esta lista es de muestra y tu archivo no se sube a ningún lado.</p>
-          <Btn icon="arrow" disabled>Revisar y publicar</Btn>
+          <Btn icon="arrow" disabled>Agregar como borradores</Btn>
         </>
       )}
     </section>

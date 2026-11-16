@@ -7,6 +7,7 @@ import { Book } from "./Book";
 import { OpenBook } from "./OpenBook";
 import { Shelf, Spine } from "./Shelf";
 import { Btn, Progress, Vial } from "./ui";
+import { Loading, SkDesk } from "./Skeleton";
 
 /**
  * "Tu escritorio" y "Tu repisa" del inicio. Depende de la sesión, así que se arma en el
@@ -20,7 +21,7 @@ export function Desk({ stories }: { stories: Story[] }) {
     return story ? [{ story, chapter: Math.min(e.chapter, Math.max(1, story.chapters)) }] : [];
   });
 
-  if (!loaded) return <section className="desk" aria-busy="true"><div className="desk__blob" aria-hidden="true" /></section>;
+  if (!loaded) return <Loading label="Cargando tu escritorio…"><SkDesk /></Loading>;
 
   if (!signedIn || reading.length === 0) {
     return (

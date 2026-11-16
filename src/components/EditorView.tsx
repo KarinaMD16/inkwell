@@ -1,194 +1,270 @@
 "use client";
 
+import { EditorContent } from "@tiptap/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
-import type { Block, ChapterMeta, MyStory } from "@/lib/data";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { refreshStory } from "@/app/actions";
+import { api } from "@/lib/api";
+import { stateLabel, whenLabel, type Block, type ManagedStory, type MyChapter, type MyChapterFull, type TitleFace, type TitleOrnament } from "@/lib/data";
+import { countWords } from "@/lib/richtext";
+import { problem } from "@/lib/story";
 import { useSession } from "./SessionProvider";
 import { Book } from "./Book";
 import { Icon, type IconName } from "./Icon";
+import { NewChapterButton } from "./NewChapterButton";
+import { FormatBar, insertTemplate, TEMPLATES, useChapterEditor } from "./RichEditor";
 import { Btn } from "./ui";
 
-type Face = "redonda" | "novela" | "maquina";
-type Ornament = "ninguno" | "sparkle" | "heart" | "moon";
-type EBlock =
-  | { id: number; type: "p"; text: string }
-  | { id: number; type: "chat"; text: string }
-  | { id: number; type: "post"; text: string }
-  | { id: number; type: "ficha"; name: string; text: string }
-  | { id: number; type: "interludio"; text: string };
-interface Draft { title: string; face: Face; ornament: Ornament; blocks: EBlock[] }
+interface Draft { title: string; face: TitleFace; ornament: TitleOrnament; blocks: Block[] }
 
-const FACES: { id: Face; label: string }[] = [{ id: "redonda", label: "Redonda" }, { id: "novela", label: "Novela" }, { id: "maquina", label: "Máquina" }];
-const ORNAMENTS: { id: Ornament; label: string; icon: IconName }[] = [
+const FACES: { id: TitleFace; label: string }[] = [{ id: "redonda", label: "Redonda" }, { id: "novela", label: "Novela" }, { id: "maquina", label: "Máquina" }];
+const ORNAMENTS: { id: TitleOrnament; label: string; icon: IconName }[] = [
   { id: "ninguno", label: "Sin adorno", icon: "x" }, { id: "sparkle", label: "Destellos", icon: "sparkle" },
   { id: "heart", label: "Corazones", icon: "heart" }, { id: "moon", label: "Lunas", icon: "moon" },
 ];
-const TEMPLATES: { type: EBlock["type"]; label: string; hint: string; icon: IconName }[] = [
-  { type: "chat", label: "Chat", hint: "Mensajes entre personajes", icon: "chat" },
-  { type: "post", label: "Post de red social", hint: "Publicación con respuestas", icon: "at" },
-  { type: "ficha", label: "Ficha de personaje", hint: "Faceclaim, datos y descripción", icon: "idcard" },
-  { type: "interludio", label: "Interludio", hint: "Una pausa con su propio formato", icon: "dash" },
-];
-const START: Draft = { title: "", face: "novela", ornament: "ninguno", blocks: [{ id: 1, type: "p", text: "" }] };
+/** Cuánto espera el autoguardado después de la última tecla. */
+const AUTOSAVE_MS = 2000;
+type SaveStatus = "limpio" | "pendiente" | "guardando" | "guardado" | "error";
+const STATUS: Record<SaveStatus, string> = {
+  limpio: "Sin cambios", pendiente: "Cambios sin guardar", guardando: "Guardando…", guardado: "Guardado en tu cuenta", error: "No se pudo guardar",
+};
 
-/** Pasa los bloques del editor al formato de la API. Los bloques vacíos no se envían. */
-function toBlocks(blocks: EBlock[]): Block[] {
-  return blocks.flatMap((b): Block[] => {
-    const text = b.text.trim();
-    if (b.type === "ficha") return b.name.trim() || text ? [{ type: "ficha", name: b.name.trim() || "Sin nombre", tags: [], text }] : [];
-    if (!text) return [];
-    if (b.type === "chat") {
-      // Un mensaje por línea, "Quién: texto".
-      const messages = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((line) => {
-        const cut = line.indexOf(":");
-        return cut > 0 ? { who: line.slice(0, cut).trim(), text: line.slice(cut + 1).trim() } : { who: "", text: line };
-      });
-      return [{ type: "chat", title: "Chat", messages }];
-    }
-    if (b.type === "post") {
-      const m = /^@?([^:\s]+):\s*([\s\S]*)$/.exec(text);
-      return [m ? { type: "post", author: m[1], text: m[2] } : { type: "post", author: "", text }];
-    }
-    return [{ type: b.type, text }];
-  });
+function toDraft(chapter: MyChapterFull): Draft {
+  return {
+    title: chapter.title === "Sin título" ? "" : chapter.title,
+    face: chapter.titleStyle?.face ?? "novela", ornament: chapter.titleStyle?.ornament ?? "ninguno", blocks: chapter.content,
+  };
 }
 
-export function EditorView({ story, chapters }: { story: MyStory; chapters: ChapterMeta[] }) {
-  const key = `inkwell:borrador:${story.slug}`;
-  const { token } = useSession();
-  const [draft, setDraft] = useState<Draft>(START);
-  const [savedAt, setSavedAt] = useState<string>("Sin cambios");
-  const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
-  /** Capítulo que se acaba de publicar, para enlazarlo. */
-  const [publishedN, setPublishedN] = useState<number | null>(null);
-  /** Capítulos ya en el servidor, contando borradores: el que se escribe es el siguiente. */
-  const [count, setCount] = useState(story.totalChapters);
+/** Lo que quedó sin guardar la última vez (se cerró la pestaña, se cayó la red), si hay algo. */
+function readBackup(key: string): Draft | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as Draft) : null;
+  } catch {
+    return null; // sin almacenamiento o copia dañada: se usa lo de la cuenta
+  }
+}
 
-  async function publish() {
+export function EditorView({ story, chapter }: { story: ManagedStory; chapter: MyChapterFull }) {
+  const backup = `inkwell:borrador:${story.slug}:${chapter.id}`;
+  const base = `/me/stories/${story.slug}/chapters/${chapter.id}`;
+  const router = useRouter();
+  const { token } = useSession();
+  const [recovered] = useState(() => readBackup(backup));
+  const [draft, setDraft] = useState<Draft>(() => recovered ?? toDraft(chapter));
+  const [live, setLive] = useState({ state: chapter.state, publishedAt: chapter.publishedAt });
+  const [status, setStatus] = useState<SaveStatus>(recovered ? "pendiente" : "limpio");
+  const [notice, setNotice] = useState(recovered ? "Recuperamos cambios de este capítulo que no se habían guardado en tu cuenta. Guárdalos para conservarlos." : "");
+  const [busy, setBusy] = useState(false);
+  /** Fecha elegida en "Programar"; null cuando el panel está cerrado. */
+  const [at, setAt] = useState<string | null>(null);
+
+  // El guardado corre fuera del ciclo de pintado (temporizador, salir de la página): lee de aquí lo último.
+  const latest = useRef({ draft, token, dirty: Boolean(recovered), autosave: chapter.state !== "publicado" });
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const inFlight = useRef<Promise<boolean> | null>(null);
+  useEffect(() => { latest.current.token = token; }, [token]);
+  useEffect(() => { latest.current.autosave = live.state !== "publicado"; }, [live.state]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  /** Guarda lo último en la cuenta. Devuelve si quedó guardado. */
+  async function save(): Promise<boolean> {
+    clearTimeout(timer.current);
+    if (inFlight.current) await inFlight.current;
+    const now = latest.current;
+    if (!now.dirty) return true;
+    if (!now.token) {
+      setStatus("error");
+      setNotice("Tu sesión se cerró. Entra de nuevo; lo que escribiste sigue guardado en este navegador.");
+      return false;
+    }
+    now.dirty = false;
+    setStatus("guardando");
+    const { title, face, ornament, blocks } = now.draft;
+    const run = api(base, { method: "PATCH", token: now.token, body: JSON.stringify({ title: title.trim(), titleStyle: { face, ornament }, content: blocks }) })
+      .then(() => {
+        // Si se escribió algo mientras viajaba la petición, todavía falta guardar eso.
+        if (latest.current.dirty) setStatus("pendiente");
+        else {
+          setStatus("guardado");
+          try { localStorage.removeItem(backup); } catch { /* nada */ }
+        }
+        return true;
+      })
+      .catch((err: unknown) => {
+        latest.current.dirty = true;
+        setStatus("error");
+        setNotice(`${problem(err, "guardar")} Lo que escribiste sigue en este navegador.`);
+        return false;
+      })
+      .finally(() => { inFlight.current = null; });
+    inFlight.current = run;
+    return run;
+  }
+
+  function change(patch: Partial<Draft>) {
+    const next = { ...latest.current.draft, ...patch };
+    latest.current.draft = next;
+    latest.current.dirty = true;
+    setDraft(next);
+    setStatus("pendiente");
+    try { localStorage.setItem(backup, JSON.stringify(next)); } catch { /* sin almacenamiento: queda el autoguardado */ }
+    clearTimeout(timer.current);
+    // Un capítulo ya publicado no se autoguarda: cada guardado lo verían quienes leen.
+    if (latest.current.autosave) timer.current = setTimeout(() => void save(), AUTOSAVE_MS);
+  }
+  const editor = useChapterEditor(draft.blocks, (blocks) => change({ blocks }));
+
+  /** Publica ahora o, con fecha, programa. Antes guarda lo que falte. */
+  async function publish(when?: Date) {
     if (busy) return;
-    const title = draft.title.trim();
-    const content = toBlocks(draft.blocks);
-    if (!title) return setNotice("Ponle un título al capítulo antes de publicarlo.");
-    if (content.length === 0) return setNotice("El capítulo está vacío: escribe al menos un párrafo.");
-    if (!token) return setNotice("Tu sesión se cerró. Entra de nuevo para publicar; tu borrador sigue guardado aquí.");
+    if (!draft.title.trim()) return setNotice("Ponle un título al capítulo antes de publicarlo.");
+    if (draft.blocks.length === 0) return setNotice("El capítulo está vacío: escribe algo antes de publicarlo.");
     setBusy(true);
     setNotice("");
     try {
-      const created = await api<{ n: number }>(`/stories/${story.slug}/chapters`, { method: "POST", token, body: JSON.stringify({ title, content, publish: true }) });
-      try { localStorage.removeItem(key); } catch { /* nada */ }
-      setDraft(START);
-      setSavedAt("Publicado");
-      setCount(created.n);
-      setPublishedN(created.n);
-    } catch (e) {
-      setNotice(e instanceof ApiError ? `No se pudo publicar: ${e.message}` : "No se pudo publicar: no hay conexión con la API. Tu borrador sigue guardado aquí.");
+      if (!(await save())) return;
+      const saved = await api<MyChapter>(`${base}/publish`, { method: "POST", token, body: JSON.stringify(when ? { at: when.toISOString() } : {}) });
+      setLive({ state: saved.state, publishedAt: saved.publishedAt });
+      setAt(null);
+      void refreshStory(story.slug);
+    } catch (err) {
+      setNotice(problem(err, when ? "programar" : "publicar"));
     } finally {
       setBusy(false);
     }
   }
 
-  // El borrador se guarda en este navegador hasta que lo publiques.
-  useEffect(() => {
+  async function unpublish() {
+    if (busy) return;
+    setBusy(true);
+    setNotice("");
     try {
-      const raw = localStorage.getItem(key);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- se lee una vez al montar
-      if (raw) setDraft(JSON.parse(raw));
-    } catch { /* sin almacenamiento */ }
-  }, [key]);
-  function change(next: Draft) {
-    setDraft(next);
-    try { localStorage.setItem(key, JSON.stringify(next)); setSavedAt("Guardado en este navegador"); } catch { setSavedAt("No se pudo guardar"); }
+      const saved = await api<MyChapter>(`${base}/unpublish`, { method: "POST", token, body: "{}" });
+      setLive({ state: saved.state, publishedAt: saved.publishedAt });
+      void refreshStory(story.slug);
+    } catch (err) {
+      setNotice(problem(err, "volver a borrador"));
+    } finally {
+      setBusy(false);
+    }
   }
-  const setBlock = (id: number, patch: Partial<EBlock>) =>
-    change({ ...draft, blocks: draft.blocks.map((b) => (b.id === id ? ({ ...b, ...patch } as EBlock) : b)) });
-  const remove = (id: number) => change({ ...draft, blocks: draft.blocks.filter((b) => b.id !== id) });
-  function add(type: EBlock["type"]) {
-    const id = Math.max(0, ...draft.blocks.map((b) => b.id)) + 1;
-    const block: EBlock = type === "ficha" ? { id, type, name: "", text: "" } : { id, type, text: "" };
-    change({ ...draft, blocks: [...draft.blocks, block] });
+
+  /** Guardar los cambios de un capítulo que ya está publicado. */
+  async function update() {
+    if (busy) return;
+    setBusy(true);
+    setNotice("");
+    if (await save()) void refreshStory(story.slug);
+    setBusy(false);
   }
+
+  /** Antes de salir se guarda el borrador, para que la lista de capítulos ya lo muestre al día. */
+  async function leave() {
+    if (live.state !== "publicado") await save();
+    router.push(`/escribir/${story.slug}`);
+  }
+
   const orn = ORNAMENTS.find((o) => o.id === draft.ornament)!;
-  const placeholder: Record<EBlock["type"], string> = {
-    p: "Sigue escribiendo…", chat: "Un mensaje por línea, así:\nLau: ¿Alguien más lo escuchó?", post: "@usuario: texto de la publicación",
-    ficha: "Descripción del personaje", interludio: "Texto del interludio",
-  };
+  const unsaved = status === "pendiente" || status === "error";
+  const words = countWords(draft.blocks);
 
   return (
     <div className="editor">
       <header className="reader__bar">
-        <Link href="/escribir" className="reader__back">
+        <button type="button" className="reader__back" onClick={() => void leave()} aria-label={`Volver a los capítulos de ${story.title}`}>
           <Icon name="back" /><Book story={story} size="xs" />
-          <span><strong>{story.title}</strong><span className="small muted">{savedAt}</span></span>
-        </Link>
+          <span><strong>{story.title}</strong><span className="small muted" role="status">{stateLabel[live.state]} · {STATUS[status]}</span></span>
+        </button>
         <div className="row wrap">
-          <Btn variant="ghost" size="sm" icon="calendar" onClick={() => setNotice("Programar la publicación todavía no existe en la API. Por ahora solo se puede publicar al momento.")}>Programar</Btn>
-          <Btn size="sm" onClick={publish} disabled={busy}>{busy ? "Publicando…" : "Publicar"}</Btn>
+          {live.state === "borrador" && (
+            <>
+              <Btn variant="ghost" size="sm" disabled={busy || !unsaved} onClick={() => void save()}>Guardar borrador</Btn>
+              <Btn variant="ghost" size="sm" icon="calendar" ariaPressed={at !== null} onClick={() => setAt(at === null ? "" : null)}>Programar</Btn>
+              <Btn size="sm" onClick={() => void publish()} disabled={busy}>{busy ? "Publicando…" : "Publicar"}</Btn>
+            </>
+          )}
+          {live.state === "programado" && (
+            <>
+              <Btn variant="ghost" size="sm" disabled={busy} onClick={() => void unpublish()}>Cancelar fecha</Btn>
+              <Btn size="sm" onClick={() => void publish()} disabled={busy}>Publicar ahora</Btn>
+            </>
+          )}
+          {live.state === "publicado" && (
+            <>
+              <Btn variant="ghost" size="sm" disabled={busy} onClick={() => void unpublish()}>Volver a borrador</Btn>
+              <Btn size="sm" onClick={() => void update()} disabled={busy || !unsaved}>{status === "guardando" ? "Guardando…" : "Guardar cambios"}</Btn>
+            </>
+          )}
         </div>
       </header>
-      {notice && <div className="notice" role="status">{notice}</div>}
-      {publishedN !== null && (
+      {at !== null && live.state === "borrador" && (
+        <form className="notice row wrap" onSubmit={(e) => { e.preventDefault(); if (at) void publish(new Date(at)); }}>
+          <label className="row"><strong>Publicar el</strong>
+            <input type="datetime-local" className="input" style={{ width: "auto", minHeight: 44 }} value={at} onChange={(e) => setAt(e.target.value)} required />
+          </label>
+          <Btn type="submit" size="sm" disabled={busy || !at}>Programar</Btn>
+          <span className="muted small">Hora de tu dispositivo. Hasta entonces nadie lo ve.</span>
+        </form>
+      )}
+      {notice && <div className="notice notice--error" role="alert">{notice}</div>}
+      {live.state === "programado" && live.publishedAt && <div className="notice" role="status">Programado: sale el {whenLabel(live.publishedAt)}. Lo que cambies hasta entonces se guarda solo.</div>}
+      {live.state === "publicado" && (
         <div className="notice" role="status">
-          Capítulo {publishedN} publicado. <Link href={`/leer/${story.slug}/${publishedN}`}>Leerlo</Link>. Puede tardar un par de minutos en aparecer en las listas.
+          Este capítulo ya está publicado. <Link href={`/historia/${story.slug}`}>Ver la historia</Link>. Lo que cambies aquí se ve cuando tocas «Guardar cambios».
         </div>
       )}
 
       <div className="editor__body">
         <nav className="editor__chapters" aria-label="Capítulos">
           <div className="eyebrow">Capítulos</div>
-          {chapters.map((c) => (
-            <Link key={c.n} href={`/leer/${story.slug}/${c.n}`} className="chapterlink"><b>{c.n}</b>{c.title}</Link>
+          {story.chapterList.map((c) => c.id === chapter.id ? (
+            <span key={c.id} className="chapterlink is-on" aria-current="page"><b>{c.n}</b><span>{draft.title || "Sin título"}</span></span>
+          ) : (
+            <Link key={c.id} href={`/editor/${story.slug}?cap=${c.id}`} className="chapterlink" onClick={() => { if (live.state !== "publicado") void save(); }}>
+              <b>{c.n}</b><span>{c.title}</span>{c.state !== "publicado" && <span className="chapterlink__state">{stateLabel[c.state]}</span>}
+            </Link>
           ))}
-          <span className="chapterlink is-on"><b>{count + 1}</b>{draft.title || "Sin título"}</span>
+          <NewChapterButton slug={story.slug} variant="ghost" size="sm" before={live.state !== "publicado" ? save : undefined}>Nuevo capítulo</NewChapterButton>
         </nav>
 
         <main className="editor__page">
-          <div className="facet">
-            <span className="eyebrow">Estilo del título</span>
-            <div className="row wrap">
-              {FACES.map((f) => (
-                <button key={f.id} type="button" className={`tag title--${f.id}${draft.face === f.id ? " tag--pick" : ""}`} aria-pressed={draft.face === f.id} onClick={() => change({ ...draft, face: f.id })}>{f.label}</button>
-              ))}
-              <span className="divider" aria-hidden="true" />
-              {ORNAMENTS.map((o) => (
-                <button key={o.id} type="button" className={`tag tag--icon${draft.ornament === o.id ? " tag--pick" : ""}`} aria-label={o.label} aria-pressed={draft.ornament === o.id} onClick={() => change({ ...draft, ornament: o.id })}>
-                  <Icon name={o.icon} size={18} />
-                </button>
-              ))}
-            </div>
-          </div>
           <div className="editor__title">
             {draft.ornament !== "ninguno" && <span className="deep"><Icon name={orn.icon} size={24} /></span>}
-            <input className={`title--${draft.face}`} value={draft.title} onChange={(e) => change({ ...draft, title: e.target.value })} aria-label="Título del capítulo" placeholder="Título del capítulo" />
+            <input
+              className={`title--${draft.face}`} value={draft.title} maxLength={120} aria-label="Título del capítulo" placeholder="Título del capítulo"
+              onChange={(e) => change({ title: e.target.value })}
+              // Enter en el título baja al texto, como en un documento.
+              onKeyDown={(e) => { if (e.key === "Enter" && editor) { e.preventDefault(); editor.view.dom.focus(); editor.commands.focus("start"); } }}
+            />
             {draft.ornament !== "ninguno" && <span className="deep"><Icon name={orn.icon} size={24} /></span>}
           </div>
-
-          {draft.blocks.map((b) => (
-            <div key={b.id} className={`eblock eblock--${b.type}`}>
-              {b.type !== "p" && (
-                <div className="row between">
-                  <span className="eblock__label"><Icon name={TEMPLATES.find((t) => t.type === b.type)!.icon} size={18} />{TEMPLATES.find((t) => t.type === b.type)!.label}</span>
-                  <button type="button" className="linkbtn" onClick={() => remove(b.id)}>Quitar</button>
-                </div>
-              )}
-              {b.type === "ficha" && (
-                <input className="eblock__name" value={b.name} onChange={(e) => setBlock(b.id, { name: e.target.value })} placeholder="Nombre del personaje" aria-label="Nombre del personaje" />
-              )}
-              <textarea
-                spellCheck lang="es" rows={b.type === "p" ? 3 : 4} value={b.text} placeholder={placeholder[b.type]}
-                aria-label={b.type === "p" ? "Párrafo" : TEMPLATES.find((t) => t.type === b.type)!.label}
-                onChange={(e) => setBlock(b.id, { text: e.target.value })}
-              />
-            </div>
-          ))}
-          <div><Btn variant="ghost" icon="plus" onClick={() => add("p")}>Párrafo</Btn></div>
+          <FormatBar editor={editor} />
+          <EditorContent editor={editor} className="editor__sheet" />
+          <span className="muted small">{words.toLocaleString("es")} {words === 1 ? "palabra" : "palabras"}</span>
         </main>
 
-        <aside className="editor__side" aria-label="Plantillas">
-          <h2 className="h-sec">Plantillas</h2>
+        <aside className="editor__side" aria-label="Opciones del capítulo">
+          <h2 className="h-sec">Título</h2>
+          <div className="row wrap">
+            {FACES.map((f) => (
+              <button key={f.id} type="button" className={`tag title--${f.id}${draft.face === f.id ? " tag--pick" : ""}`} aria-pressed={draft.face === f.id} onClick={() => change({ face: f.id })}>{f.label}</button>
+            ))}
+          </div>
+          <div className="row wrap">
+            {ORNAMENTS.map((o) => (
+              <button key={o.id} type="button" className={`tag tag--icon${draft.ornament === o.id ? " tag--pick" : ""}`} aria-label={o.label} aria-pressed={draft.ornament === o.id} onClick={() => change({ ornament: o.id })}>
+                <Icon name={o.icon} size={18} />
+              </button>
+            ))}
+          </div>
+
+          <h2 className="h-sec" style={{ marginTop: 16 }}>Plantillas</h2>
+          <span className="muted small">Se insertan donde está el cursor.</span>
           {TEMPLATES.map((t) => (
-            <button key={t.type} type="button" className="tpl" onClick={() => add(t.type)}>
+            <button key={t.type} type="button" className="tpl" disabled={!editor} onClick={() => editor && insertTemplate(editor, t.type)}>
               <span className="tpl__icon"><Icon name={t.icon} size={22} /></span>
               <span><strong>{t.label}</strong><span className="small muted">{t.hint}</span></span>
             </button>

@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuthHref } from "@/lib/useAuthHref";
+import { AccountEmail } from "./AccountEmail";
 import { Icon } from "./Icon";
+import { ProfileSummary } from "./ProfileSummary";
+import { Loading, ProfileSummarySkeleton, Sk } from "./Skeleton";
 import { useSession } from "./SessionProvider";
 import { Btn, Leader } from "./ui";
 
@@ -51,18 +54,21 @@ export function SettingsView() {
       <h1 className="h-hero">Ajustes</h1>
       <p className="notice" role="status">Las preferencias de lectura y notificaciones se guardan en este navegador; todavía no se sincronizan con tu cuenta.</p>
 
+      {session ? <ProfileSummary /> : !ready && <section className="card"><Sk w={110} h={28} r={4} /><ProfileSummarySkeleton /></section>}
+
       <section className="card">
         <div className="shelflabel">Cuenta</div>
         {session ? (
           <>
             <Leader k="Usuario">{profile ? `@${profile.handle}` : "…"}</Leader>
-            <Leader k="Correo">{session.user.email ?? "—"}</Leader>
+            <AccountEmail />
             <div className="row wrap">
-              {profile && <Btn variant="ghost" size="sm" href={`/perfil/${profile.handle}`} icon="eye">Ver mi perfil</Btn>}
               <Btn variant="ghost" size="sm" href="/recuperar">Cambiar contraseña</Btn>
               <Btn variant="ghost" size="sm" onClick={signOut}>Cerrar sesión</Btn>
             </div>
           </>
+        ) : !ready ? (
+          <Loading label="Cargando tu cuenta…" className="stack-sm"><Sk w="100%" h={16} /><Sk w="100%" h={16} /><Sk w={200} h={40} r={999} /></Loading>
         ) : ready ? (
           <>
             <p className="muted">No has entrado a tu cuenta.</p>

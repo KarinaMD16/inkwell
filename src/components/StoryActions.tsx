@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Story } from "@/lib/data";
 import { useLibrary } from "@/lib/useLibrary";
 import { useAuthHref } from "@/lib/useAuthHref";
@@ -42,10 +42,29 @@ export function StoryActions({ story }: { story: Story }) {
   function open() {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) return router.push(href);
-    setOpening(true);
     router.prefetch(href);
-    window.setTimeout(() => router.push(href), 1150);
+    setOpening(true);
   }
+
+  // La animación dura lo que tarda en abrirse el libro y recién entonces se navega. Al salir de la
+  // ficha el libro se vuelve a cerrar: Next conserva esta pantalla para el botón "atrás", y si
+  // `opening` quedara encendido se volvería a una pantalla tapada por la animación ya terminada
+  // (y el siguiente "Abrir el libro" no animaría nada).
+  useEffect(() => {
+    if (!opening) return;
+    const timer = window.setTimeout(() => router.push(href), 1150);
+    return () => {
+      window.clearTimeout(timer);
+      setOpening(false);
+    };
+  }, [opening, href, router]);
+
+  // Lo mismo cuando el navegador restaura la página entera desde su caché de "atrás/adelante".
+  useEffect(() => {
+    const close = (e: PageTransitionEvent) => { if (e.persisted) setOpening(false); };
+    window.addEventListener("pageshow", close);
+    return () => window.removeEventListener("pageshow", close);
+  }, []);
 
   return (
     <>

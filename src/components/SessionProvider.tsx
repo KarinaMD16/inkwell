@@ -3,10 +3,11 @@
 import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import type { Profile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 
-export interface Profile { id: string; handle: string; name: string; bio: string }
+export type { Profile };
 
 interface SessionCtx {
   /** false mientras se lee la sesión guardada en el navegador. */
@@ -14,6 +15,10 @@ interface SessionCtx {
   session: Session | null;
   token: string | null;
   profile: Profile | null;
+  /** Por qué no se pudo cargar el perfil (null mientras carga o si cargó bien). */
+  profileError: string | null;
+  /** Vuelve a pedir el perfil a la API. */
+  reloadProfile: () => void;
   /** true cuando la persona llegó desde el enlace de "recuperar contraseña". */
   recovering: boolean;
   setProfile: (p: Profile) => void;
@@ -23,8 +28,9 @@ interface SessionCtx {
 const Ctx = createContext<SessionCtx | null>(null);
 
 /**
- * Trae el perfil de la API (lo crea la primera vez). Si la persona eligió nombre de usuario
- * al registrarse, ese nombre viaja en los metadatos de Supabase y se aplica aquí una sola vez.
+ * Trae el perfil de la API (lo crea la primera vez). Lo que la persona escribió al registrarse
+ * (nombre de usuario y fecha de nacimiento) viaja en los metadatos de Supabase y se pasa al
+ * perfil aquí, una sola vez.
  */
 async function loadProfile(session: Session): Promise<Profile> {
   const token = session.access_token;
@@ -38,6 +44,15 @@ async function loadProfile(session: Session): Promise<Profile> {
     }
     await supabase().auth.updateUser({ data: { handle: null } });
   }
+  const birthdate = session.user.user_metadata?.birthdate as string | undefined;
+  if (birthdate) {
+    if (!profile.birthdate) {
+      try {
+        profile = await api<Profile>("/me", { method: "PATCH", token, body: JSON.stringify({ birthdate }) });
+      } catch { /* fecha rechazada: se puede completar en Ajustes */ }
+    }
+    await supabase().auth.updateUser({ data: { birthdate: null } });
+  }
   return profile;
 }
 
@@ -47,6 +62,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [recovering, setRecovering] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const sb = supabase();
@@ -70,10 +87,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) return;
     let alive = true;
-    loadProfile(session).then((p) => { if (alive) setProfile(p); }).catch(() => {});
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- se limpia el error del intento anterior
+    setProfileError(null);
+    loadProfile(session)
+      .then((p) => { if (alive) setProfile(p); })
+      .catch((err: unknown) => {
+        if (!alive) return;
+        // El detalle queda en la consola para quien programa; la persona ve un mensaje claro.
+        console.error("No se pudo cargar el perfil desde la API:", err);
+        setProfileError(
+          err instanceof ApiError
+            ? `La API respondió con un error (${err.status}) al cargar tu perfil.`
+            : "No hay conexión con la API de Inkwell.",
+        );
+      });
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- se recarga solo al cambiar de persona
-  }, [userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- se recarga al cambiar de persona o al reintentar
+  }, [userId, attempt]);
+
+  const reloadProfile = useCallback(() => setAttempt((n) => n + 1), []);
 
   const signOut = useCallback(async () => {
     await supabase().auth.signOut();
@@ -87,6 +119,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     session,
     token: session?.access_token ?? null,
     profile: session && profile?.id === session.user.id ? profile : null,
+    profileError: session ? profileError : null,
+    reloadProfile,
     recovering,
     setProfile,
     signOut,

@@ -10,12 +10,15 @@ const pad = (n: number | string) => String(n).padStart(2, "0");
  * Fecha en tres listas (día, mes, año) en lugar del calendario nativo: para una fecha de
  * nacimiento es más rápido que retroceder mes a mes. Entrega "AAAA-MM-DD" cuando está completa.
  */
-export function DateField({ name, label, invalid, describedBy, onChange }: {
+export function DateField({ name, label, invalid, describedBy, onChange, defaultValue }: {
   name: string; label: string; invalid?: boolean; describedBy?: string; onChange?: (iso: string) => void;
+  /** Fecha inicial "AAAA-MM-DD". */
+  defaultValue?: string | null;
 }) {
-  const [day, setDay] = useState("");
-  const [month, setMonth] = useState("");
-  const [year, setYear] = useState("");
+  const initial = /^(\d{4})-(\d{2})-(\d{2})$/.exec(defaultValue ?? "");
+  const [day, setDay] = useState(initial ? String(Number(initial[3])) : "");
+  const [month, setMonth] = useState(initial ? String(Number(initial[2])) : "");
+  const [year, setYear] = useState(initial ? initial[1] : "");
   // El año actual se lee en el navegador, no al generar la página.
   const [thisYear, setThisYear] = useState<number | null>(null);
   useEffect(() => {

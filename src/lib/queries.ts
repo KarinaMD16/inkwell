@@ -1,7 +1,9 @@
 // Solo para componentes del servidor: usa "use cache".
-import { cacheLife } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import { api, ApiError } from "./api";
-import { colorFor, toStory, type ApiStory, type Author, type Block, type ChapterMeta, type Story } from "./data";
+import { colorFor, toStory, type ApiStory, type Author, type Block, type ChapterMeta, type Story, type TitleStyle } from "./data";
+import { profileTag, type PublicProfile } from "./profile";
+import { storyTag } from "./story";
 
 // ----- Lectura pública desde la API -----
 // Todo lo público se cachea unos minutos ("use cache"): las páginas se prerenderizan
@@ -28,6 +30,7 @@ export async function getStories(): Promise<Story[]> {
 export async function getStory(slug: string): Promise<Story | undefined> {
   "use cache";
   cacheLife("minutes");
+  cacheTag(storyTag(slug));
   const story = await orNull(api<ApiStory>(`/stories/${encodeURIComponent(slug)}`));
   return story ? toStory(story) : undefined;
 }
@@ -35,6 +38,7 @@ export async function getStory(slug: string): Promise<Story | undefined> {
 export async function getChapters(slug: string): Promise<ChapterMeta[]> {
   "use cache";
   cacheLife("minutes");
+  cacheTag(storyTag(slug));
   const list = await orNull(api<{ n: number; title: string; badge: string | null }[]>(`/stories/${encodeURIComponent(slug)}/chapters`));
   return (list ?? []).map((c) => ({ n: c.n, title: c.title, badge: c.badge ?? undefined }));
 }
@@ -42,8 +46,9 @@ export async function getChapters(slug: string): Promise<ChapterMeta[]> {
 export async function getChapter(slug: string, n: number): Promise<{ meta: ChapterMeta; blocks: Block[] } | undefined> {
   "use cache";
   cacheLife("minutes");
-  const c = await orNull(api<{ n: number; title: string; badge: string | null; content: Block[] }>(`/stories/${encodeURIComponent(slug)}/chapters/${n}`));
-  return c ? { meta: { n: c.n, title: c.title, badge: c.badge ?? undefined }, blocks: c.content } : undefined;
+  cacheTag(storyTag(slug));
+  const c = await orNull(api<{ n: number; title: string; titleStyle: TitleStyle | null; badge: string | null; content: Block[] }>(`/stories/${encodeURIComponent(slug)}/chapters/${n}`));
+  return c ? { meta: { n: c.n, title: c.title, badge: c.badge ?? undefined, titleStyle: c.titleStyle ?? undefined }, blocks: c.content } : undefined;
 }
 
 export async function getStoriesBy(handle: string): Promise<Story[]> {
@@ -61,9 +66,13 @@ export async function getAuthors(): Promise<string[]> {
 export async function getAuthor(handle: string): Promise<Author | undefined> {
   "use cache";
   cacheLife("minutes");
-  const p = await orNull(api<{ handle: string; name: string; bio: string }>(`/profiles/${encodeURIComponent(handle)}`));
+  cacheTag(profileTag(handle));
+  const p = await orNull(api<PublicProfile>(`/profiles/${encodeURIComponent(handle)}`));
   if (!p) return undefined;
   // Seguidores llegan cuando la API tenga "seguir".
-  return { handle: p.handle, name: p.name, bio: p.bio || "Todavía no escribió su presentación.", followers: 0, following: 0, color: colorFor(p.handle) };
+  return {
+    handle: p.handle, name: p.name, bio: p.bio, link: p.link, avatarUrl: p.avatarUrl, bannerUrl: p.bannerUrl,
+    joined: p.createdAt, followers: 0, following: 0, color: colorFor(p.handle),
+  };
 }
 

@@ -8,6 +8,7 @@ import type { Block, ChapterMeta, Story } from "@/lib/data";
 import { useAuthHref } from "@/lib/useAuthHref";
 import { useSession } from "./SessionProvider";
 import { Book } from "./Book";
+import { RichText } from "./RichText";
 import { Icon } from "./Icon";
 import { Btn, IconBtn } from "./ui";
 
@@ -133,14 +134,14 @@ export function ReaderView({ story, chapter, total, blocks }: { story: Story; ch
       <article className="reader__page">
         <div>
           <div className="eyebrow">Capítulo {chapter.n}</div>
-          <h1 className="h-hero" style={{ fontSize: "clamp(30px, 6vw, 44px)" }}>{chapter.title}</h1>
+          <h1 className={`h-hero${chapter.titleStyle ? ` title--${chapter.titleStyle.face}` : ""}`} style={{ fontSize: "clamp(30px, 6vw, 44px)" }}>{chapter.title}</h1>
         </div>
         <div className="reader__text" style={{ fontSize: prefs.size, lineHeight: prefs.spacing, fontFamily: prefs.serif ? "var(--font-read)" : "var(--font-ui)" }}>
           {blocks.map((b, i) => {
             if (b.type === "p") {
               return (
                 <div key={i} className="para">
-                  <p>{b.text}</p>
+                  <p style={b.align ? { textAlign: b.align } : undefined}><RichText text={b.text} marks={b.marks} /></p>
                   {b.comments ? (
                     <Link href={auth.registro} className="para__comments" aria-label={`${b.comments} comentarios en este párrafo`}>
                       <Icon name="chat" size={15} />{b.comments}

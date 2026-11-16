@@ -30,7 +30,7 @@ export default async function Inicio() {
           <h2 className="h-page">¿Tu historia vive en un Word?</h2>
           <p>Sube el .docx y detectamos tus capítulos. Revisas, ajustas y publicas.</p>
         </div>
-        <Btn variant="paper" href="/escribir" icon="upload">Importar .docx</Btn>
+        <Btn variant="paper" href="/escribir/nueva" icon="upload">Importar .docx</Btn>
       </section>
 
       <section className="shelf">

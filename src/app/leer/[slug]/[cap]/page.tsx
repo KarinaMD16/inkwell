@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ReaderView } from "@/components/ReaderView";
+import { ReaderSkeleton } from "@/components/Skeleton";
 import { getChapter, getChapters, getStories, getStory } from "@/lib/queries";
 
 export async function generateStaticParams() {
@@ -18,7 +19,7 @@ export async function generateMetadata({ params }: PageProps<"/leer/[slug]/[cap]
 // La lectura de `params` va dentro de <Suspense>: así la navegación muestra el marco al instante.
 export default function Leer({ params }: PageProps<"/leer/[slug]/[cap]">) {
   return (
-    <Suspense fallback={<p className="muted" style={{ padding: 24 }}>Abriendo el capítulo…</p>}>
+    <Suspense fallback={<ReaderSkeleton />}>
       <Capitulo params={params} />
     </Suspense>
   );

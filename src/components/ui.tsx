@@ -31,7 +31,12 @@ export function Chip({ children, tone = "tint" }: { children: ReactNode; tone?: 
   return <span className={`chip chip--${tone}`}>{children}</span>;
 }
 
-export function Avatar({ letter, color, size = 44 }: { letter: string; color: string; size?: number }) {
+/** Foto de perfil; sin foto, la inicial sobre el color de la persona. */
+export function Avatar({ letter, color, size = 44, src }: { letter: string; color: string; size?: number; src?: string | null }) {
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element -- la API ya entrega la imagen recortada y en WebP
+    return <img src={src} alt="" aria-hidden="true" className="avatar avatar--img" width={size} height={size} style={{ width: size, height: size }} />;
+  }
   return (
     <span aria-hidden="true" className="avatar" style={{ width: size, height: size, background: color, fontSize: size * 0.42 }}>
       {letter.toUpperCase()}

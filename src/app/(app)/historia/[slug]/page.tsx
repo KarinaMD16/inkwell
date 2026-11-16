@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { StorySkeleton } from "@/components/Skeleton";
 import { Book } from "@/components/Book";
 import { Icon } from "@/components/Icon";
 import { Board, Spine } from "@/components/Shelf";
@@ -28,7 +29,7 @@ function TagRow({ label, tags }: { label: string; tags: string[] }) {
 // La lectura de `params` va dentro de <Suspense>: así la navegación muestra el marco al instante.
 export default function Historia({ params }: PageProps<"/historia/[slug]">) {
   return (
-    <Suspense fallback={<p className="muted">Sacando el libro de la repisa…</p>}>
+    <Suspense fallback={<StorySkeleton />}>
       <Ficha params={params} />
     </Suspense>
   );
@@ -59,11 +60,10 @@ async function Ficha({ params }: Pick<PageProps<"/historia/[slug]">, "params">) 
           <Board />
         </div>
         <div className="ficha">
-          <div className="row between">
-            <span className="ficha__no">FICHA N.º {String(i + 409).padStart(4, "0")}</span>
-            <span className="stamp">{story.status.toUpperCase()}</span>
+          <div className="ficha__head">
+            <h1 className="h-hero">{story.title}</h1>
+            <span className={`stamp${story.status === "Completa" ? " stamp--done" : ""}`}>{story.status.toUpperCase()}</span>
           </div>
-          <h1 className="h-hero">{story.title}</h1>
           <p className="lead">{story.tagline}</p>
           <Leader k="Autor/a"><Link href={`/perfil/${story.author}`}>@{story.author}</Link></Leader>
           <Leader k="Capítulos">{story.chapters}</Leader>
@@ -82,11 +82,13 @@ async function Ficha({ params }: Pick<PageProps<"/historia/[slug]">, "params">) 
           </section>
           <section className="stack-sm">
             <h2 className="h-sec">Etiquetas</h2>
-            <TagRow label="Género" tags={[story.genre]} />
+            <TagRow label="Género" tags={[story.genre, ...story.subgenres]} />
             <TagRow label="Fandom" tags={[story.fandom]} />
             <TagRow label="Relación" tags={story.relation ? [story.relation] : []} />
+            <TagRow label="Personajes" tags={story.characters} />
             <TagRow label="Tropos" tags={story.tropes} />
             <TagRow label="Advertencias" tags={story.warnings} />
+            <TagRow label="Más" tags={story.tags} />
             <TagRow label="Clasificación" tags={[story.rating, story.format]} />
           </section>
           <section className="mood">

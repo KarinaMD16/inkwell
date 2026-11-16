@@ -1,9 +1,10 @@
 "use client";
 
-import { fmt, type MyStory } from "@/lib/data";
+import { fmt, isVisible, type MyStory } from "@/lib/data";
 import { useMyStories } from "@/lib/useMyStories";
 import { useAuthHref } from "@/lib/useAuthHref";
 import { Book } from "./Book";
+import { WorksSkeleton } from "./Skeleton";
 import { Icon, type IconName } from "./Icon";
 import { Btn, Chip } from "./ui";
 
@@ -23,7 +24,7 @@ export function MyWorks() {
   const auth = useAuthHref();
   const { loaded, signedIn, stories, error } = useMyStories();
 
-  if (!loaded) return <p className="muted">Buscando tus cuadernos…</p>;
+  if (!loaded) return <WorksSkeleton />;
   if (!signedIn) {
     return (
       <div className="empty">
@@ -38,7 +39,7 @@ export function MyWorks() {
     return (
       <div className="empty">
         <h2 className="h-sec">Tu primera historia empieza aquí</h2>
-        <p className="muted">Créala, escribe el primer capítulo y publícalo cuando quieras.</p>
+        <p className="muted">Primero el libro: título, género, portada y etiquetas. Después escribes el primer capítulo o importas tu manuscrito.</p>
         <Btn href="/escribir/nueva" icon="plus">Nueva historia</Btn>
       </div>
     );
@@ -54,7 +55,7 @@ export function MyWorks() {
           <span className="muted">Sigue escribiendo</span>
           <h2 className="h-page">{current.title}</h2>
           <span>{note(current)}</span>
-          <div className="row"><Btn href={`/editor/${current.slug}`} icon="pen">Continuar</Btn></div>
+          <div className="row"><Btn href={`/escribir/${current.slug}`} icon="pen">Continuar</Btn></div>
         </div>
       </section>
 
@@ -73,9 +74,10 @@ export function MyWorks() {
               <span className="h-card">{story.title}</span>
               <span className="muted small">{note(story)}</span>
             </div>
-            <Chip tone={story.published ? "tint" : "lilac"}>{story.published ? "Publicada" : "Borrador"}</Chip>
-            <span className="meta"><span><Icon name="eye" size={16} />{story.published ? fmt(story.reads) : "—"}</span></span>
-            <Btn variant="ghost" size="sm" href={`/editor/${story.slug}`} icon="pen">Escribir</Btn>
+            <Chip tone={isVisible(story) ? "tint" : "lilac"}>{isVisible(story) ? "Publicada" : "Borrador"}</Chip>
+            <span className="meta"><span><Icon name="eye" size={16} />{isVisible(story) ? fmt(story.reads) : "—"}</span></span>
+            <Btn variant="ghost" size="sm" href={`/escribir/${story.slug}`} icon="list">Capítulos</Btn>
+            <Btn variant="ghost" size="sm" href={`/escribir/${story.slug}?vista=detalles`} icon="settings">Detalles</Btn>
           </div>
         ))}
       </section>
