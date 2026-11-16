@@ -17,11 +17,21 @@ export interface PublicProfile {
   createdAt: string;
 }
 
-/** Tu propio perfil: lo público más el correo de tu cuenta y tu fecha de nacimiento. */
+/** lector, moderador o admin. Igual que en la API. */
+export type Role = "lector" | "moderador" | "admin";
+export const ROLE_LABEL: Record<Role, string> = { lector: "Lectura", moderador: "Moderación", admin: "Administración" };
+const RANK: Record<Role, number> = { lector: 0, moderador: 1, admin: 2 };
+/** ¿Tiene al menos este rol? */
+export const atLeast = (role: Role | undefined, min: Role) => RANK[role ?? "lector"] >= RANK[min];
+
+/** Tu propio perfil: lo público más el correo de tu cuenta, tu fecha de nacimiento, tu rol y si está suspendida. */
 export interface Profile extends PublicProfile {
   id: string;
   email: string | null;
   birthdate: string | null;
+  role: Role;
+  suspendedAt: string | null;
+  suspendedReason: string | null;
 }
 
 export type ImageKind = "avatar" | "banner";

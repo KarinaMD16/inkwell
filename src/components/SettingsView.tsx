@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuthHref } from "@/lib/useAuthHref";
 import { AccountEmail } from "./AccountEmail";
+import { AccountTools } from "./AccountTools";
 import { Icon } from "./Icon";
 import { ProfileSummary } from "./ProfileSummary";
 import { Loading, ProfileSummarySkeleton, Sk } from "./Skeleton";
@@ -76,6 +77,8 @@ export function SettingsView() {
           </>
         ) : null}
       </section>
+
+      <AccountTools />
 
       <section className="card">
         <div className="shelflabel">Lectura</div>

@@ -349,6 +349,8 @@ a:hover .book__in, a:focus-visible .book__in, .book:hover .book__in { transform:
 .preview { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 20px; padding: 28px; border-radius: 32px; background: var(--sand); }
 .preview__stage { display: flex; justify-content: center; padding: 12px 0; }
 .side__settings { margin-top: auto; }
+/* Con el enlace de administración, ese va primero al fondo y Ajustes justo debajo. */
+.side__admin { margin-top: auto; } .side__admin + .side__settings { margin-top: 0; }
 
 /* ---------- controles propios: nada con el aspecto nativo del navegador ---------- */
 button, input, select, textarea { appearance: none; -webkit-appearance: none; border-radius: 0; }
@@ -500,13 +502,15 @@ input[type="checkbox"].sr-only { width: 1px; height: 1px; border: 0; }
 .mediaedit { position: relative; padding-bottom: 56px; }
 .mediaedit__banner { position: relative; aspect-ratio: 3 / 1; border-radius: 16px; background-size: cover; background-position: center; overflow: hidden; }
 .mediaedit__actions { position: absolute; right: 12px; top: 12px; display: flex; gap: 8px; }
-.mediaedit__hint { padding-left: 132px; }
+/* La ayuda ocupa la franja libre a la derecha de la foto, la que sobresale bajo la portada (56px + el gap de .stack-sm). */
+.mediaedit__hint { display: flex; flex-direction: column; justify-content: center; min-height: 56px; margin-top: -64px; padding-left: 148px; line-height: 1.4; }
 .mediaedit__avatar { position: absolute; left: 20px; bottom: 0; padding: 5px; border-radius: 50%; background: #fff; }
 .mediabtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(20, 21, 43, 0.72); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; backdrop-filter: blur(6px); transition: background-color 0.15s; }
 .mediabtn:hover { background: var(--ink); }
 .mediabtn:has(input:focus-visible) { outline: 3px solid var(--mint); outline-offset: 2px; }
 .mediabtn:has(input:disabled), .mediabtn:disabled { opacity: 0.6; cursor: default; }
 .mediabtn--round { position: absolute; right: 0; bottom: 4px; width: 40px; padding: 0; border: 3px solid #fff; }
+.mediabtn--remove { top: 4px; bottom: auto; width: 32px; min-height: 32px; }
 .mediaedit__status { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255, 251, 248, 0.6); font-weight: 700; }
 .mediaedit__status--round { border-radius: 50%; font-size: 13px; }
 .is-busy .mediaedit__status { animation: pulse 1.2s ease-in-out infinite; }
@@ -646,7 +650,7 @@ button.reader__back { border: 0; background: transparent; padding: 0; text-align
   .shell { display: block; }
   .side { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: auto; height: auto; flex-direction: row; justify-content: center; padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--line); background: #fff; }
   .side__logo { display: none; }
-  .side__settings { display: none; }
+  .side__settings, .side__admin { display: none; }
   .preview { position: static; } .preview .book { zoom: 0.7; }
   .side__nav { flex-direction: row; width: 100%; gap: 2px; } .side__link { flex: 1; width: auto; min-height: 56px; }
   .topbar { padding-top: 14px; } .content { padding: 24px 20px 120px; } .foot { padding-bottom: 110px; }
@@ -654,7 +658,7 @@ button.reader__back { border: 0; background: transparent; padding: 0; text-align
   .profile { border-radius: 28px; }
   .profile__body { padding: 0 20px 24px; gap: 16px; }
   .profile__avatar { margin-top: -68px; }
-  .mediaedit__hint { padding-left: 0; }
+  .mediaedit__hint { padding-left: 0; margin-top: 0; min-height: 0; }
   .savebar.is-dirty { bottom: calc(84px + env(safe-area-inset-bottom)); }
   .savebar__note { display: none; }
   .profile__avatar .avatar { width: 96px !important; height: 96px !important; }
@@ -684,3 +688,20 @@ button.reader__back { border: 0; background: transparent; padding: 0; text-align
   .book__in, .spine, .btn { transition: none; }
   .opening, .opening__page, .opening__cover, .toast { animation: none; }
 }
+
+/* ----- Administración ----- */
+.confirm { width: min(520px, calc(100vw - 24px)); }
+.suspended { width: calc(100% - 2 * clamp(20px, 4vw, 56px)); max-width: calc(1352px - 2 * clamp(20px, 4vw, 56px)); margin: 16px auto 0; }
+.admin__filters { gap: 10px; align-items: center; }
+.admin__search { flex: 1 1 280px; max-width: none; height: 48px; }
+.admin__search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; }
+.admin__row { align-items: flex-start; }
+.admin__meta { overflow-wrap: anywhere; }
+.admin__reason { color: #7a1a14; }
+.admin__actions { gap: 8px; align-items: center; justify-content: flex-end; }
+.admin__spine { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 52px; flex: none; border-radius: 4px 8px 8px 4px; font-family: var(--font-display); font-weight: 800; font-size: 18px; box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.12); }
+.admin__log time { white-space: nowrap; }
+@media (max-width: 760px) {
+  .admin__actions { justify-content: flex-start; width: 100%; }
+}
+

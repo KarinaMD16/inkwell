@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { colorFor } from "@/lib/data";
+import { atLeast } from "@/lib/profile";
 import { useAuthHref } from "@/lib/useAuthHref";
 import { Icon, type IconName } from "./Icon";
 import { useSession } from "./SessionProvider";
@@ -22,6 +23,8 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
 /** Los enlaces de la barra. `path` es null mientras no se conoce la ruta: se pintan sin marcar ninguno. */
 function SideLinks({ path }: { path: string | null }) {
   const isOn = (href: string) => path !== null && (href === "/" ? path === "/" : path.startsWith(href));
+  // Moderación y administración ven su panel; el resto no sabe que existe.
+  const staff = atLeast(useSession().profile?.role, "moderador");
   return (
     <>
       <div className="side__nav">
@@ -35,6 +38,12 @@ function SideLinks({ path }: { path: string | null }) {
           </Link>
         ))}
       </div>
+      {staff && (
+        <Link href="/admin" className={`side__link side__admin${isOn("/admin") ? " is-on" : ""}`} aria-current={isOn("/admin") ? "page" : undefined}>
+          <Icon name="idcard" size={22} stroke={isOn("/admin") ? 2.2 : 1.8} />
+          <span>Admin</span>
+        </Link>
+      )}
       <Link href="/ajustes" className={`side__link side__settings${isOn("/ajustes") ? " is-on" : ""}`} aria-current={isOn("/ajustes") ? "page" : undefined}>
         <Icon name="settings" size={22} />
         <span>Ajustes</span>
@@ -90,6 +99,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
         </header>
+        {profile?.suspendedAt && (
+          <p className="notice notice--error suspended" role="status">
+            Tu cuenta está suspendida{profile.suspendedReason ? `: ${profile.suspendedReason}` : ""}. Puedes seguir leyendo, pero no escribir ni publicar, y tu perfil no se ve. Desde <Link href="/ajustes">Ajustes</Link> puedes descargar tus datos o borrar tu cuenta.
+          </p>
+        )}
         <main className="content">{children}</main>
         <footer className="foot">
           <span>Inkwell · by Koral Studio</span>

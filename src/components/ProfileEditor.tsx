@@ -247,13 +247,18 @@ function ProfileImages({ profile, token, onSaved }: { profile: Profile; token: s
             <input type="file" accept={IMAGE_ACCEPT} className="sr-only" onChange={(e) => pick("avatar", e)} disabled={busy !== null} />
             <Icon name="upload" size={16} stroke={2.2} />
           </label>
+          {profile.avatarUrl && (
+            <button type="button" className="mediabtn mediabtn--round mediabtn--remove" onClick={() => remove("avatar")} disabled={busy !== null} aria-label="Quitar foto de perfil" title="Quitar foto">
+              <Icon name="x" size={14} stroke={2.4} />
+            </button>
+          )}
           {busy === "avatar" && !cropping && <span className="mediaedit__status mediaedit__status--round">Un momento…</span>}
         </div>
       </div>
-      <div className="row between wrap mediaedit__hint">
-        <span className="muted small">Al elegir una imagen podrás encuadrarla. JPG, PNG, WebP o GIF de hasta 8 MB.</span>
-        {profile.avatarUrl && <button type="button" className="linkbtn" onClick={() => remove("avatar")} disabled={busy !== null}>Quitar foto</button>}
-      </div>
+      <p className="muted small mediaedit__hint">
+        <span>La foto queda cuadrada y la portada, horizontal (3 a 1). Al elegir una, la encuadras antes de subirla.</span>
+        <span>JPG, PNG, WebP, AVIF o GIF de hasta 8 MB. Un GIF animado queda quieto.</span>
+      </p>
       {error && <p className="notice notice--error" role="alert">{error}</p>}
       {cropping && (
         <ImageCropper

@@ -106,12 +106,15 @@ export function toStory(a: ApiStory): Story {
   };
 }
 
-/** Una historia propia: incluye si ya es pública y cuántos capítulos tiene contando borradores. */
-export interface MyStory extends Story { published: boolean; totalChapters: number }
-export type ApiMyStory = ApiStory & { published: boolean; totalChapters: number };
+/**
+ * Una historia propia: incluye si ya es pública, cuántos capítulos tiene contando borradores y,
+ * si moderación la retiró, cuándo y por qué.
+ */
+export interface MyStory extends Story { published: boolean; totalChapters: number; removedAt: string | null; removedReason: string | null }
+export type ApiMyStory = ApiStory & { published: boolean; totalChapters: number; removedAt?: string | null; removedReason?: string | null };
 
 export function toMyStory(a: ApiMyStory): MyStory {
-  return { ...toStory(a), published: a.published, totalChapters: a.totalChapters };
+  return { ...toStory(a), published: a.published, totalChapters: a.totalChapters, removedAt: a.removedAt ?? null, removedReason: a.removedReason ?? null };
 }
 
 export type ChapterState = "borrador" | "programado" | "publicado";
@@ -129,9 +132,9 @@ export function toManaged(a: ApiManagedStory): ManagedStory {
   return { ...toMyStory(a), chapterList: a.chapterList };
 }
 
-/** Una historia se ve cuando su autora la publicó y ya tiene al menos un capítulo fuera. */
+/** Una historia se ve cuando su autora la publicó, ya tiene al menos un capítulo fuera y moderación no la retiró. */
 export function isVisible(s: MyStory): boolean {
-  return s.published && s.chapters > 0;
+  return s.published && s.chapters > 0 && !s.removedAt;
 }
 
 export const stateLabel: Record<ChapterState, string> = { borrador: "Borrador", programado: "Programado", publicado: "Publicado" };

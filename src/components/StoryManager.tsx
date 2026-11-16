@@ -23,6 +23,7 @@ function Message({ title, children }: { title: string; children: React.ReactNode
 }
 
 function visibility(story: ManagedStory): { label: string; tone: "tint" | "lilac" | "sand" } {
+  if (story.removedAt) return { label: "Retirada", tone: "sand" };
   if (isVisible(story)) return { label: "Publicada", tone: "tint" };
   if (!story.published && story.chapterList.some((c) => c.state === "publicado")) return { label: "Escondida", tone: "sand" };
   return { label: "Borrador", tone: "lilac" };
@@ -186,6 +187,11 @@ export function StoryManager() {
       </section>
       )}
 
+      {story.removedAt && (
+        <p className="notice notice--error" role="status">
+          Moderación retiró esta historia y no se ve en Inkwell{story.removedReason ? `. Motivo: ${story.removedReason}` : ""}. La sigues viendo y editando aquí.
+        </p>
+      )}
       {notice && <p className="notice notice--error" role="alert">{notice}</p>}
 
       {view === "capitulos" && (

@@ -74,7 +74,7 @@ export function MyWorks() {
               <span className="h-card">{story.title}</span>
               <span className="muted small">{note(story)}</span>
             </div>
-            <Chip tone={isVisible(story) ? "tint" : "lilac"}>{isVisible(story) ? "Publicada" : "Borrador"}</Chip>
+            <Chip tone={story.removedAt ? "sand" : isVisible(story) ? "tint" : "lilac"}>{story.removedAt ? "Retirada" : isVisible(story) ? "Publicada" : "Borrador"}</Chip>
             <span className="meta"><span><Icon name="eye" size={16} />{isVisible(story) ? fmt(story.reads) : "—"}</span></span>
             <Btn variant="ghost" size="sm" href={`/escribir/${story.slug}`} icon="list">Capítulos</Btn>
             <Btn variant="ghost" size="sm" href={`/escribir/${story.slug}?vista=detalles`} icon="settings">Detalles</Btn>
